@@ -8,7 +8,7 @@ Created on Wed July 21 07:07:57 2021
 
 To generate a batch of games, run xzgame_generator.py
 
-To play a batch of games, run xzgame-all_in_1.py, where you need select
+To play a batch of games, run xzgame.py, where you need select
     - game batch: file_name (the one we use is 'game_batch_0302_1000')
     - n_GAME: how many games you want to play (the number we use is 10)
     - changshu: starting from which game? (the number we use is 0)
