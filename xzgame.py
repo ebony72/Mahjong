@@ -14,7 +14,7 @@ import utils.xzscore as score
 
 
 '''import the two strategies to compare (you may design your own strategy) '''
-import strategy_initial as strategy #our initial stratey: to be compared with
+import strategy_initial21_7attr as strategy #our initial stratey: to be compared with
     
 
 class XZMahjongGame(object):
