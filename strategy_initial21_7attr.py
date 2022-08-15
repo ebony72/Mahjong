@@ -7,13 +7,8 @@
 '''Revised on June 4, 2020: 
     vec_discard_val revised to address all essential tile issue'''
     
-from dfncy.block_dfncy_7attr import dfncy 
-# from discard21 import dfncy_descent_val, dfncy_descent_xval, discard_step_val
-# from discard21 import report_diff_selected_tile
-# discard_val = dfncy_descent_xval
-
+from dfncy.block_dfncy import dfncy 
 from utils.xzutils import *
-# from copy import deepcopy
 
 '''In this program, player choose this imperfect strtegy to decide whether to hu/
    robkong/zimo/pong/kong/zikong and which card to discard
