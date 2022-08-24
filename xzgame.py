@@ -300,7 +300,7 @@ if __name__ == '__main__':
         save_result(changshu, content)
 
         content = 'The scores of four players are: %s' %([p.myscore for p in game.players])
-        # print(content)
+        print(content)
         save_result(changshu, content)
         save_result(summary, content)
 
