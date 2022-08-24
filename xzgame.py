@@ -111,8 +111,9 @@ if __name__ == '__main__':
         Games = json.loads(f.read())
     summary = 'summary'
             
-    n_GAME = 10 # number of games
-    changshu = 0  #the game id starts from changshu 
+    n_GAME = 1 # number of games
+    '''Select you test game, here we consider the first game'''
+    changshu = 0  #the game id starts from changshu, which is between 0 and 999 
     
     now = datetime.now()
     
