@@ -11,6 +11,7 @@ from xzround import MahjongRound as Round
 from xzjudger import MahjongJudger as Judger
 from utils.xzutils import *
 import utils.xzscore as score
+from dfncy.block_dfncy import dfncy 
 
 
 '''import the two strategies to compare (you may design your own strategy) '''
@@ -268,7 +269,13 @@ if __name__ == '__main__':
             content = ' numWl = %s \n n_hu = %s \n dc = %s \n c = %s \n Q = %s \n NQHand = %s \n Pile =  %s \n Table = %s \n KB = %s'\
                       %(numWl, n_hu, dc, c, Q, NQ, game.players[current_player].pile, game.dealer.table, KB)
             save_result(changshu, content)
-
+            
+            #added on 19/09/2022
+            cur_dfncy = dfncy(NQ,Pg,KB,dc) # the deficiency of player's hand
+            content = '  The current deficiency of the player is' %cur_dfncy'
+            save_result(changshu, content)
+            
+            
             if action != None and action != 'stand' and action[0] != 'stand':
                 num_state_change += 1
             '''Proceed to the next round '''
