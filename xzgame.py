@@ -15,7 +15,7 @@ from dfncy.block_dfncy import dfncy
 
 
 '''import the two strategies to compare (you may design your own strategy) '''
-import strategy_initial21_7attr as strategy #our initial stratey: to be compared with
+import strategy_initial21 as strategy #our initial stratey: to be compared with
     
 
 class XZMahjongGame(object):
@@ -34,7 +34,7 @@ class XZMahjongGame(object):
             (dict): The first state of the game
             (int): Current player's id
         '''
-        # Initialize a dealer that can deal cards
+        # Initialize a dealer that can deal tiles
         self.dealer = Dealer()
 
         # Initialize four players to play the game
@@ -45,7 +45,7 @@ class XZMahjongGame(object):
         state = self.get_state(self.round.current_player)
         self.cur_state = state 
 
-        # Deal 13 cards to each player and 1 card to current_player to prepare for the game
+        # Deal 13 tiles to each player and 1 card to current_player to prepare for the game
         if index: #
             ''' index is 1 if we have finished all rounds and want to start a new game '''  
             for player in self.players:
@@ -113,8 +113,8 @@ if __name__ == '__main__':
     summary = 'summary'
             
     n_GAME = 1 # number of games
-    '''Select you test game, here we consider the first game'''
-    changshu = 0  #the game id starts from changshu, which is between 0 and 999 
+    '''select your test game''' 
+    changshu = 9  #the game id starts from changshu from 0 to 999  
     
     now = datetime.now()
     
@@ -169,7 +169,13 @@ if __name__ == '__main__':
         save_result(summary, content)        
         content = 'DQC = %s' %DQC
         save_result(changshu, content)
+        content = '----------------(End of Initial State)----------------' 
+        save_result(changshu, content)
+
         save_result(summary, content)
+        
+        # content = 'Note that the state for each material action except draws is shown in the record of the next step!'
+        # save_result(changshu, content)
 
         game_record = [H0, H1, H2, H3, W, DQC] #the initial state
 
@@ -191,8 +197,12 @@ if __name__ == '__main__':
             last_player = game.round.player_before_act # (int)
             numWl = len(game.dealer.deck) #number of tiles in the Wall
             table = game.dealer.table
-            content = ' Table = %s' %table
-            save_result(changshu, content)
+            content = ' ------- End of step %s -------' %i
+            if i>0: save_result(changshu, content)
+
+            # content = ' Table = %s ' %table
+            # save_result(changshu, content)
+            
 
             i += 1
             #num_state_change += 1
@@ -203,9 +213,9 @@ if __name__ == '__main__':
 
             '''For each valid act, the players select a legal action to execute according to his strategy. '''
             PerformStrategy = strategy
-            save_result(changshu, content)
+            #save_result(changshu, content)
                                 
-            '''There are 27+6+1 = 34 different valid_acts except None (27 cards, hu, pong, kong, zimo, zikong, robkong) '''
+            '''There are 27+6+1 = 34 different valid_acts except None (27 tiles, hu, pong, kong, zimo, zikong, robkong) '''
             if valid_act == None:
                 ''' This is the case only when the game is over // check! '''
                 if game.dealer.deck == 0 and len(game.round.winners) < 3: 
@@ -219,72 +229,99 @@ if __name__ == '__main__':
                 action = 'self_check'
                 #we assume, in step 1, Player 0 draws the last_drawn_card. In reality, it was dealt by the dealer before step 1. 
                 if i == 1: #the first step, current_player should be 0
-                    content = 'Step %s : Game starts and Player %s self-check \n Wall = %s' \
-                              %(i, current_player, numWl)
+                    content = 'Step %s : Game starts and Player %s checks his hand' %(i, current_player)
                 if i > 1:
                     last_drawn_card = game.players[current_player].hand[-1] #Achtung! Assume hand is not sorted.
-                    content = 'Step %s : Player %s draws %s and self-check \n Wall = %s \n Winners = %s' \
-                              %(i, current_player, last_drawn_card, numWl, [p.player_id for p in game.players if p.winning])
+                    content = 'Step %s : Player %s draws %s and checks his hand \n Winners = %s' \
+                              %(i, current_player, last_drawn_card, [p.player_id for p in game.players if p.winning])
             elif valid_act == 'hu':
                 action = 'hu'
-                content = 'Step %s : Player %s can hu and shall execute %s' %(i, current_player, action)
+                content = 'Step %s : Player %s can hu and executes %s' %(i, current_player, action)
             elif valid_act == 'pong':
                 action = PerformStrategy.check_pong(game.players[current_player], game.dealer, game.players)
-                content = 'Step %s : Player %s can pong and shall execute %s' %(i, current_player, action)
+                content = 'Step %s : Player %s can pong and executes %s' %(i, current_player, action)
             elif valid_act == 'kong':
                 action = PerformStrategy.check_kong(game.players[current_player], game.dealer, game.players)
-                content = 'Step %s : Player %s can kong and shall execute %s' %(i, current_player, action)
+                content = 'Step %s : Player %s can kong and executes %s' %(i, current_player, action)
             elif valid_act == 'zimo':
                 action = 'zimo' #actually both strategies choose 'zimo'
-                content = 'Step %s : Player %s shall execute zimo' %(i, current_player)
+                content = 'Step %s : Player %s executes zimo' %(i, current_player)
             elif valid_act == 'zikong':
                 action = PerformStrategy.check_zikong(game.players[current_player], game.dealer, game.players)                
-                content = 'Step %s : Player %s can zikong and shall execute %s' %(i, current_player, action)
+                content = 'Step %s : Player %s can zikong and executes %s' %(i, current_player, action)
             elif valid_act == 'robkong':
                 action = 'robkong'
-                content = 'Step %s : Player %s can rob kong and shall execute %s' %(i, current_player, action)
+                content = 'Step %s : Player %s can rob kong and executes %s' %(i, current_player, action)
             else:  #valid_act == 'discard'
                 ''' If the valid_act is 'discard', the player then selects one tile to discard according to his strategy. ''' 
                 action = PerformStrategy.select_a_card_to_discard(game.players[current_player], game.dealer, game.players)
-                content = 'Step %s : Player %s shall discard %s' %(i, current_player, action)
+                content = 'Step %s : Player %s discards %s' %(i, current_player, action)
                 #sl the action here is a card in the player's hand
                 #sl at this time the action (tile) has already been appended to dealer.table   
             
             save_result(changshu, content)
 
+            # '''Record the state info of the player'''
+            # '''Note that the corresponding material action (discard/pong/kong/hu/robkong/zikong/zimo) has not been execited''' 
+            # T = deepcopy(game.players[current_player].hand)
+            # dc = DQC[game.players[current_player].player_id]
+            # Q = list(x[1] for x in T if x[0] == dc)
+            # Q.sort()
+            # NQ = list(x for x in T if x[0] != dc)
+            # NQ.sort(key=lambda t: t[0:2])
+            # winners = [p.player_id for p in game.players if p.winning]
+            # n_hu = len(winners)
+            # KB = game.players[current_player].kgbase(game.dealer, game.players)
+            # c = game.players[current_player].get_dominant_color()
+            
+            # Pile = game.players[current_player].pile
+            # Pg = list(t[0] for t in Pile)
+              
+            # content = ' numWl = %s \n Winners = %s \n dc = %s \n c = %s \n Q = %s \n NQHand = %s \n Pile =  %s \n Table = %s \n KB = %s'\
+            #           %(numWl, winners, dc, c, Q, NQ, game.players[current_player].pile, game.dealer.table, [KB[0:9],KB[9:18],KB[18:27]])
+            # save_result(changshu, content)
+            
+            # #added on 19/09/2022
+            # cur_dfncy = dfncy(NQ,Pg,KB,dc) # the deficiency of player's hand
+            # content = '  The current deficiency of the player is %s' %cur_dfncy
+            # save_result(changshu, content)
+
+            if action != None and action != 'stand' and action[0] != 'stand':
+                num_state_change += 1
+            '''Proceed to the next round '''
+            state, button = game.step(action)
+
+            content = 'The current state of player %s is as follows: ' %game.players[current_player].player_id
+
             '''Record the state info of the player'''
+            '''Note that the corresponding material action (discard/pong/kong/hu/robkong/zikong/zimo) has not been execited''' 
             T = deepcopy(game.players[current_player].hand)
             dc = DQC[game.players[current_player].player_id]
             Q = list(x[1] for x in T if x[0] == dc)
             Q.sort()
             NQ = list(x for x in T if x[0] != dc)
             NQ.sort(key=lambda t: t[0:2])
-            n_hu = len([p.player_id for p in game.players if p.winning])
+            winners = [p.player_id for p in game.players if p.winning]
+            n_hu = len(winners)
             KB = game.players[current_player].kgbase(game.dealer, game.players)
             c = game.players[current_player].get_dominant_color()
             
             Pile = game.players[current_player].pile
             Pg = list(t[0] for t in Pile)
               
-            content = ' numWl = %s \n n_hu = %s \n dc = %s \n c = %s \n Q = %s \n NQHand = %s \n Pile =  %s \n Table = %s \n KB = %s'\
-                      %(numWl, n_hu, dc, c, Q, NQ, game.players[current_player].pile, game.dealer.table, KB)
+            content = ' numWl = %s \n Winners = %s \n dc = %s \n c = %s \n Q = %s \n NQHand = %s \n Pile =  %s \n Table = %s \n KB = %s'\
+                      %(numWl, winners, dc, c, Q, NQ, game.players[current_player].pile, game.dealer.table, [KB[0:9],KB[9:18],KB[18:27]])
             save_result(changshu, content)
             
             #added on 19/09/2022
             cur_dfncy = dfncy(NQ,Pg,KB,dc) # the deficiency of player's hand
-            content = '  The current deficiency of the player is' %cur_dfncy'
-            save_result(changshu, content)
-            
-            
-            if action != None and action != 'stand' and action[0] != 'stand':
-                num_state_change += 1
-            '''Proceed to the next round '''
-            state, button = game.step(action)
+            content = ' The current deficiency of player %s is %s' %(game.players[current_player].player_id, cur_dfncy)
+            save_result(changshu, content)            
                         
         if game.is_over:
             content = '****** Game Over *****'
             save_result(changshu, content)
-            content = 'The game stops with valid_act: %s and %s cards in the Wall and %s winners'\
+            content = 'The game stops with valid_act: %s and %s tiles in the Wall and %s winners'\
                       %(game.round.valid_act, len(game.dealer.deck), len(game.round.winners))
             save_result(changshu, content)   
             content = 'The last action is: %s' %action
