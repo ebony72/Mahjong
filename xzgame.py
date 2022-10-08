@@ -261,31 +261,6 @@ if __name__ == '__main__':
             
             save_result(changshu, content)
 
-            # '''Record the state info of the player'''
-            # '''Note that the corresponding material action (discard/pong/kong/hu/robkong/zikong/zimo) has not been execited''' 
-            # T = deepcopy(game.players[current_player].hand)
-            # dc = DQC[game.players[current_player].player_id]
-            # Q = list(x[1] for x in T if x[0] == dc)
-            # Q.sort()
-            # NQ = list(x for x in T if x[0] != dc)
-            # NQ.sort(key=lambda t: t[0:2])
-            # winners = [p.player_id for p in game.players if p.winning]
-            # n_hu = len(winners)
-            # KB = game.players[current_player].kgbase(game.dealer, game.players)
-            # c = game.players[current_player].get_dominant_color()
-            
-            # Pile = game.players[current_player].pile
-            # Pg = list(t[0] for t in Pile)
-              
-            # content = ' numWl = %s \n Winners = %s \n dc = %s \n c = %s \n Q = %s \n NQHand = %s \n Pile =  %s \n Table = %s \n KB = %s'\
-            #           %(numWl, winners, dc, c, Q, NQ, game.players[current_player].pile, game.dealer.table, [KB[0:9],KB[9:18],KB[18:27]])
-            # save_result(changshu, content)
-            
-            # #added on 19/09/2022
-            # cur_dfncy = dfncy(NQ,Pg,KB,dc) # the deficiency of player's hand
-            # content = '  The current deficiency of the player is %s' %cur_dfncy
-            # save_result(changshu, content)
-
             if action != None and action != 'stand' and action[0] != 'stand':
                 num_state_change += 1
             '''Proceed to the next round '''
@@ -316,8 +291,21 @@ if __name__ == '__main__':
             #added on 19/09/2022
             cur_dfncy = dfncy(NQ,Pg,KB,dc) # the deficiency of player's hand
             content = ' The current deficiency of player %s is %s' %(game.players[current_player].player_id, cur_dfncy)
-            save_result(changshu, content)            
-                        
+            save_result(changshu, content)    
+            
+            #added on 08/10/2022
+            if cur_dfncy <= 1:
+                Sol_temp = []
+                for x in MJ():
+                    if x[0] == dc or not KB[kbf(x)]: continue
+                    NQ_temp = copy.deepcopy(NQ)
+                    NQ_temp.append(x)
+                    NQ_temp.sort(key=lambda t: t[0:2])
+                    if dfncy(NQ_temp,Pg,KB,dc) == 0: #x is a solution
+                        Sol_temp.append(x)
+                content = ' The soltuion set of player %s is %s' %(game.players[current_player].player_id, Sol_temp)
+                save_result(changshu, content) 
+            
         if game.is_over:
             content = '****** Game Over *****'
             save_result(changshu, content)
