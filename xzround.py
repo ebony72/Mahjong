@@ -45,35 +45,11 @@ class MahjongRound(object):
         return None
 
     def information_output(self,players):
-        
-        String_lists = []
-        string_list = []
-        string_list.append(str(self.step))
-        string_list.append((str(self.current_player)))
-        string_list.append(":".join([str(self.action_idx),str(self.action_tile_idx)]))
-        string_list.append(str(players[self.current_player].get_deficiency(self.dealer,players)))#20210302N     
-        current_winners = [p.player_id for p in players if p.winning]
-        string_list.append(",".join([str(winner) for winner in current_winners]))           
-        current_scores = [p.myscore for p in players]
-        string_list.append(",".join([str(a_score) for a_score in current_scores]))
-        temp1 = []
-        temp2 = []
-        for a_player in players:
-            temp1.append(":".join(str(HU_WAYS[way]) for way in a_player.hu_way))
-            if a_player.winning_card:
-                t = a_player.winning_card[:]
-                temp2.append(str(get_tile_idx(t[0],t[1])))
-            else:
-                temp2.append("")
-            
-        string_list.append(",".join(str(e) for e in temp1))
-        string_list.append(",".join(str(e) for e in temp2))
-        String_lists.append(
-            ";".join(string_list)
-        )
-        # format_data(self.changshu, String_lists)
-        #&
-        pass
+        '''Disabled: the format_data sink (EasyRead) is not part of this repo,
+           so the per-step strings — which needed a full deficiency
+           computation via get_deficiency — were built and then discarded.
+           See git history for the original body.'''
+        return
 
     def proceed_round(self, players, action): 
 

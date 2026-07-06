@@ -15,7 +15,7 @@ from dfncy.block_dfncy import dfncy
 
 
 '''import the two strategies to compare (you may design your own strategy) '''
-import strategy_initial21 as strategy #our initial stratey: to be compared with
+import strategy_initial21_7attr as strategy #our initial stratey: to be compared with
     
 
 class XZMahjongGame(object):
@@ -113,8 +113,13 @@ if __name__ == '__main__':
     summary = 'summary'
             
     n_GAME = 1 # number of games
-    '''select your test game''' 
-    changshu = 9  #the game id starts from changshu from 0 to 999  
+    '''select your test game'''
+    changshu = 9  #the game id starts from changshu from 0 to 999
+
+    '''optional command-line override: python3 xzgame.py [changshu] [n_GAME]'''
+    import sys
+    if len(sys.argv) > 1: changshu = int(sys.argv[1])
+    if len(sys.argv) > 2: n_GAME = int(sys.argv[2])
     
     now = datetime.now()
     
@@ -217,8 +222,10 @@ if __name__ == '__main__':
                                 
             '''There are 27+6+1 = 34 different valid_acts except None (27 tiles, hu, pong, kong, zimo, zikong, robkong) '''
             if valid_act == None:
-                ''' This is the case only when the game is over // check! '''
-                if game.dealer.deck == 0 and len(game.round.winners) < 3: 
+                ''' This is the case only when the game is over // check!
+                    (unreachable: the while-loop guard exits first; the
+                     wall-exhausted scoring is done after the loop) '''
+                if len(game.dealer.deck) == 0 and len(game.round.winners) < 3:
                      score.update_finalScore(game.dealer, game.players)
                 content = 'Game over and the winners are in %s' %([p.player_id for p in game.players if p.winning])                         
                 # print(content)
@@ -270,7 +277,7 @@ if __name__ == '__main__':
 
             '''Record the state info of the player'''
             '''Note that the corresponding material action (discard/pong/kong/hu/robkong/zikong/zimo) has not been execited''' 
-            T = deepcopy(game.players[current_player].hand)
+            T = list(game.players[current_player].hand) #tiles never mutate in place
             dc = DQC[game.players[current_player].player_id]
             Q = list(x[1] for x in T if x[0] == dc)
             Q.sort()
@@ -298,7 +305,7 @@ if __name__ == '__main__':
                 Sol_temp = []
                 for x in MJ():
                     if x[0] == dc or not KB[kbf(x)]: continue
-                    NQ_temp = copy.deepcopy(NQ)
+                    NQ_temp = list(NQ)
                     NQ_temp.append(x)
                     NQ_temp.sort(key=lambda t: t[0:2])
                     if dfncy(NQ_temp,Pg,KB,dc) == 0: #x is a solution
@@ -306,7 +313,7 @@ if __name__ == '__main__':
                 content = ' The soltuion set of player %s is %s' %(game.players[current_player].player_id, Sol_temp)
                 save_result(changshu, content) 
             
-        if game.is_over:
+        if game.is_over():
             content = '****** Game Over *****'
             save_result(changshu, content)
             content = 'The game stops with valid_act: %s and %s tiles in the Wall and %s winners'\

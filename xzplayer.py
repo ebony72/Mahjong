@@ -104,19 +104,15 @@ class MahjongPlayer(object):
             dealer (object): Dealer
             players (list): List of all players
         '''
-        KT = deepcopy(self.hand)
+        K = [4]*27
+        for card in self.hand:
+            K[card[0]*9 + card[1] - 1] -= 1
         for player in players:
             for p in player.pile:
                 for card in p:
-                    KT.append(card)
-
-        KT = KT + dealer.table                   
-        
-        K = [4]*27
-        for x in MJ():
-            p = x[0]*9 + x[1] - 1
-            a = KT.count(x)
-            K[p] = 4 - a
+                    K[card[0]*9 + card[1] - 1] -= 1
+        for card in dealer.table:
+            K[card[0]*9 + card[1] - 1] -= 1
         return K
 
 
@@ -124,7 +120,7 @@ class MahjongPlayer(object):
         #q check if this function is necessary
         ''' Compute the deficiency of the player's hand
         '''                
-        T = deepcopy(self.hand)
+        T = self.hand #read-only below
         Pg = [ p[0] for p in self.pile]
         dc = self.daque_color
         KB = self.kgbase(dealer, players)
@@ -167,11 +163,7 @@ class MahjongPlayer(object):
         #2020022709-sl: record all public information
         dealer.table.append(card)
         dealer.act_history.append([self.player_id, 'discard', card])
-        discard_list = deepcopy(dealer.discard_lists[self.player_id])
-        discard_list.append(card)
-        #print(discard_list)
-        dealer.discard_lists[self.player_id] = deepcopy(discard_list)
-        #print(dealer.discard_lists[self.player_id])
+        dealer.discard_lists[self.player_id].append(card)
 
 
         #print('Player %s discards: %s' %(self.player_id, card))
@@ -279,7 +271,7 @@ class MahjongPlayer(object):
         score_record =  self.scoreRecords[-1] # ['zimo', zimo_id, hu_times, +hu_times*base_score]
                         #['tianhu', tdhu_di, tdhu_fan, +tdhu_fan*base_score]
         dealer.win_info[self.player_id] = [self.winning_card] + score_record
-        dealer.act_history.append([self.player_id, 'robkong', jiakong_card, jiakong_player])
+        dealer.act_history.append([self.player_id, 'robkong', jiakong_card, jiakong_player.player_id])
 
         #print('Player %s hu_way: %s' %(self.player_id, self.hu_way))
         #for player in players:        

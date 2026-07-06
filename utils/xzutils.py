@@ -27,18 +27,17 @@ def init_deck(): #Achtung! deck contains only mahjong zero tiles (lists), not ca
     return deck
     
 #\__/#\#/\#\__/#\#/\__/--\__/#\__/#\#/~\
+_MJ_TILES = [[c, n] for c in range(3) for n in range(1, 10)]
+
 def MJ():
     ''' Define the set of mahjong tiles
         arg: None
         return:
             X (list): list of tiles [c,n], where c in {0,1,2}, n in [1,9]
     '''
-    X = [[0,0]]*27
-    for c in range(3):
-        for n in range(1,10):
-            if c*9+n <= 27:
-                X[c*9+n-1] = [c,n]
-    return X
+    #tiles are never mutated in place (cf. init_deck's deck*4 aliasing),
+    #so sharing the tile lists is safe; only the outer list is fresh
+    return list(_MJ_TILES)
 
 def kbf(card): # the same as MJ().index(card)
     ''' Return the index of a mahjong tile in MJ()

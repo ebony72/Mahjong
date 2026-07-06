@@ -12,6 +12,19 @@ Created on Fri May 14 07:22:24 2021
 '''dc = daque color, dfncy = deficiency number '''
 from utils.xzutils import *
 
+'''Memoization caches. dfncy is called hundreds of times per discard decision
+   on hands that differ by a single tile, so the block decompositions and suit
+   typesets overlap almost entirely between calls. Keys are immutable copies of
+   the full inputs, so a cached result is always exactly what the original
+   computation would return. Caches are cleared when they reach _CACHE_LIMIT
+   entries to bound memory in long batch runs.'''
+_CACHE_LIMIT = 400000
+_dcmp_cache = {}
+_typeset_cache = {}
+_pure_type_cache = {}
+_hand_type_cache = {}
+_dfncy_cache = {}
+
 
 def break_point(i, T, KBase):
     '''Find the first break point of a suit T'''
@@ -45,6 +58,19 @@ def block_div(T, KBase):
     return [T]
 
 def block_dcmp(block, KBase):
+    '''Memoized front end of _block_dcmp_impl. The recursion removes one
+       meld/pmeld at a time, so sub-blocks repeat heavily both within one
+       call tree and across dfncy calls.'''
+    key = (tuple(block), tuple(KBase))
+    result = _dcmp_cache.get(key)
+    if result is None:
+        result = _block_dcmp_impl(block, KBase)
+        if len(_dcmp_cache) >= _CACHE_LIMIT:
+            _dcmp_cache.clear()
+        _dcmp_cache[key] = result
+    return result
+
+def _block_dcmp_impl(block, KBase):
     '''Return the set of p-decompositions of a block given the current KBase'''
     '''block (a list of integers, denoting nearly consecutive tiles of the same color)
         KBbase (the sublist of KB of this color)
@@ -177,18 +203,14 @@ def remainder(dcmp, T):
         Here T may consist of tiles that are not singleton blocks '''
     
     if not dcmp: return T
-    TX = T[:]
-    used_tile = []
-    Unused_Tile = TX[:]
+    Unused_Tile = T[:]
     for pmeld in dcmp:
-        if not pmeld: continue
-        used_tile += pmeld
-    for tile in used_tile:
-        if tile not in T: raise Exception ('%s tile %s not in %s' %(dcmp,tile,T))
-        if tile in Unused_Tile: 
-            Unused_Tile.remove(tile)
+        for tile in pmeld:
+            if tile not in T: raise Exception ('%s tile %s not in %s' %(dcmp,tile,T))
+            if tile in Unused_Tile:
+                Unused_Tile.remove(tile)
     Unused_Tile.sort()
-    return Unused_Tile  
+    return Unused_Tile
 
 def reserve_tile(pmeld,Kbase):
     '''return the reserved tile of a pmeld'''
@@ -248,28 +270,47 @@ def join_em(re1,rm1,em1,re2,rm2,em2):
 def get_type(dcmp, block, Kbase, blockRest, cal_em, emconflict):
     '''Get the type set of dcmp, calc_em = (re0,rm0,em0)'''
     if not block: return {(0,0,0,0,0,0,0)}
-    if list(pm for pm in dcmp if len(pm)!=3 and len(pm)!=2): 
-        raise Exception('dcmp error', dcmp)
 
-    Kb = Kbase[:]
     if len(dcmp) == 0: #dcmp is ()
+        Kb = Kbase[:]
         m,n,p,e = 0,0,0,0
         hasPair = []
         hasEye = []
     else:
-        m = len(list(pm for pm in dcmp if len(pm)==3)) #number of melds
-        n = len(dcmp) - m 
-        
-        temp = [0,0,0,0,0,0,0,0,0] #tempKB
-        for pmeld in dcmp:
-            tempx = reserve_tile(pmeld,Kbase)
-            temp = [temp[i]+tempx[i] for i in range(9)]
-        '''//todo: Not precise. Consider when KB has only 1 tile 6, 
-            but two pmelds (45) and (78) both need 6. '''
-        # Kb = [ math.ceil(Kbase[i]-temp[i]) for i in range(9)]
-        Kb = [ max(0,Kbase[i]-temp[i]) for i in range(9)]
-        
-        hasPair = [pm[0] for pm in dcmp if len(pm)==2 and pm[0]==pm[1]]
+        m = 0
+        pmelds2 = [] #the 2-tile pmelds; only these reserve tiles from Kbase
+        for pm in dcmp:
+            lpm = len(pm)
+            if lpm == 3: m += 1
+            elif lpm == 2: pmelds2.append(pm)
+            else: raise Exception('dcmp error', dcmp)
+        n = len(dcmp) - m
+
+        if pmelds2:
+            temp = [0,0,0,0,0,0,0,0,0] #tempKB (reserve_tile inlined per pmeld)
+            for pmeld in pmelds2:
+                t1, t2 = pmeld
+                if t1>t2 or t2-t1>2: raise Exception ('pmeld error', pmeld)
+                if t1==t2:
+                    pass #don't consider pairs here
+                elif t2 == t1+2:
+                    temp[t1] += 1
+                elif t1==1:
+                    temp[2] += 1
+                elif t1==8:
+                    temp[6] += 1
+                elif Kbase[t2]:
+                    temp[t2] += 1
+                else:
+                    temp[t1-2] += 1 #//todo: Is this good?
+            '''//todo: Not precise. Consider when KB has only 1 tile 6,
+                but two pmelds (45) and (78) both need 6. '''
+            # Kb = [ math.ceil(Kbase[i]-temp[i]) for i in range(9)]
+            Kb = [ Kbase[i]-temp[i] if Kbase[i]>temp[i] else 0 for i in range(9)]
+        else:
+            Kb = Kbase[:] #nothing reserved
+
+        hasPair = [pm[0] for pm in pmelds2 if pm[0]==pm[1]]
         hasEye = [t for t in hasPair if Kb[t-1]==0]
         p = len(hasPair)
         e = len(hasEye)
@@ -323,39 +364,77 @@ def get_type(dcmp, block, Kbase, blockRest, cal_em, emconflict):
     return {(m,n,p,0,re,0,0),(m,n,p,0,0,rm,0),(m,n,p,min(p,1),0,rmp,0)} 
     
 def typeset(block, Kb, blockRest, cal_em, emconflict):
+    '''Memoized front end of _typeset_impl. When one tile of a suit changes,
+       the other blocks of the suit keep their typesets.
+       get_type reads cal_em only through max(cal_em), so the key needs just
+       that 0/1 value — this lets a suit hit the cache even when the hand-level
+       cal_em changed because of the other suit.'''
+    key = (tuple(block), tuple(Kb), tuple(blockRest), max(cal_em), emconflict)
+    result = _typeset_cache.get(key)
+    if result is None:
+        result = _typeset_impl(block, Kb, blockRest, cal_em, emconflict)
+        if len(_typeset_cache) >= _CACHE_LIMIT:
+            _typeset_cache.clear()
+        _typeset_cache[key] = result
+    return result
+
+def _typeset_impl(block, Kb, blockRest, cal_em, emconflict):
     '''Return the typeset of block, where cal_em = (re0,rm0,em0), emcomflict (bool)
         blockRest: sublist of tiles in block not in any singleton block of the suite
     '''
     TypeSet = set()
-    comps = block_dcmp(block, Kb)  
+    comps = block_dcmp(block, Kb)
+    seen = set() #get_type only aggregates over the pmelds, so decompositions
+                 #that are permutations of each other yield the same type set
     for dcmp in comps:
+        canon = tuple(sorted(dcmp))
+        if canon in seen: continue
+        seen.add(canon)
         dtype = get_type(dcmp, block, Kb, blockRest, cal_em, emconflict) #dtype is a set
-        TypeSet = TypeSet | dtype
-        
+        TypeSet |= dtype
+
     TypeList = list(TypeSet)
     if not TypeList: return [(0,0,0,0,0,0,0)]
 
     return TypeList
 
 
-def join_typeset(TypeList1, TypeList2):    
-    '''Return the combined TypeList of two blocks '''    
+def join_typeset(TypeList1, TypeList2):
+    '''Return the combined TypeList of two blocks (join_em inlined)'''
     TypeSet = set()
-    
+    add = TypeSet.add
     for type1 in TypeList1:
+        m1,n1,p1,e1,re1,rm1,em1 = type1
+        max1 = max(re1,rm1,em1)
         for type2 in TypeList2:
-            if type1[3]+type2[3] > 1: continue
-            re1,rm1,em1 = type1[4:7]
-            re2,rm2,em2 = type2[4:7]
-            re0,rm0,em0 = join_em(re1,rm1,em1,re2,rm2,em2)
-            newtype = (type1[0]+type2[0],type1[1]+type2[1],\
-                       type1[2]+type2[2],type1[3]+type2[3],re0,rm0,em0)
-            TypeSet.add(newtype)
+            e0 = e1+type2[3]
+            if e0 > 1: continue
+            re2,rm2,em2 = type2[4],type2[5],type2[6]
+            if max1 == 1 and max(re2,rm2,em2) == 1:
+                em0 = 0
+            else:
+                em0 = em1 if em1>=em2 else em2
+            add((m1+type2[0], n1+type2[1], p1+type2[2], e0,
+                 re1 if re1>=re2 else re2, rm1 if rm1>=rm2 else rm2, em0))
 
     TypeList = list(TypeSet)
     return TypeList
 
-def max_pure_type(T, Kbase, cal_em_local, cal_em, emconflict): 
+def max_pure_type(T, Kbase, cal_em_local, cal_em, emconflict):
+    '''Memoized front end of _max_pure_type_impl. In a discard decision the
+       candidate hands share whole suits, so suit-level results repeat.
+       cal_em only reaches get_type via max(cal_em) (see typeset), so keying
+       on that 0/1 value is exact and raises the hit rate.'''
+    key = (tuple(T), tuple(Kbase), cal_em_local, max(cal_em), emconflict)
+    result = _pure_type_cache.get(key)
+    if result is None:
+        result = _max_pure_type_impl(T, Kbase, cal_em_local, cal_em, emconflict)
+        if len(_pure_type_cache) >= _CACHE_LIMIT:
+            _pure_type_cache.clear()
+        _pure_type_cache[key] = result
+    return result
+
+def _max_pure_type_impl(T, Kbase, cal_em_local, cal_em, emconflict):
     '''Return all types of a suite T (a list of integers denoting pure tiles)
         cal_em_local is the cal_em of the suite, cal_em is that of the hand
     '''
@@ -407,24 +486,39 @@ def noo_type(handtype,pg):
     if m==1 and n<=1: return True #cost >= 6
     return False
 
-def hand_type(TypeList1, TypeList2, pg): 
+def hand_type(TypeList1, TypeList2, pg):
+    '''Memoized front end of _hand_type_impl: the suit TypeLists repeat
+       across the candidate hands of one discard decision.'''
+    key = (tuple(TypeList1), tuple(TypeList2), pg)
+    result = _hand_type_cache.get(key)
+    if result is None:
+        result = _hand_type_impl(TypeList1, TypeList2, pg)
+        if len(_hand_type_cache) >= _CACHE_LIMIT:
+            _hand_type_cache.clear()
+        _hand_type_cache[key] = result
+    return result
+
+def _hand_type_impl(TypeList1, TypeList2, pg):
     '''Return the combined TypeList of the two color hand with l existing Pongs
         TypeList1/2 is the TypeList of suite1/2 which are not daque color '''
-        
+
     TypeSet = set()
+    add = TypeSet.add
     for type1 in TypeList1:
+        m1,n1,p1,e1,re1,rm1,em1 = type1
+        max1 = max(re1,rm1,em1)
         for type2 in TypeList2:
-            m,n,p,e = type1[0]+type2[0],type1[1]+type2[1],\
-                       type1[2]+type2[2],type1[3]+type2[3]
-            re1,rm1,em1 = type1[4:7]
-            re2,rm2,em2 = type2[4:7]
-            re0,rm0,em0 = join_em(re1,rm1,em1,re2,rm2,em2)
-            newtype = (m,n,p,e,re0,rm0,em0)
-            TypeSet.add(newtype)
+            re2,rm2,em2 = type2[4],type2[5],type2[6]
+            if max1 == 1 and max(re2,rm2,em2) == 1:
+                em0 = 0
+            else:
+                em0 = em1 if em1>=em2 else em2
+            add((m1+type2[0], n1+type2[1], p1+type2[2], e1+type2[3],
+                 re1 if re1>=re2 else re2, rm1 if rm1>=rm2 else rm2, em0))
     TypeList = list(TypeSet)
-    
+
     TypeList = [x for x in TypeList if not noo_type(x,pg)]
-    TypeList.sort(key=lambda t: t[0:7], reverse=True)
+    TypeList.sort(reverse=True) #7-tuples: same order as key=lambda t: t[0:7]
     
     '''Most often, we need only consider the top 5 types, but sometimes
         the optimal cost is obtained from the 18th type:
@@ -437,12 +531,10 @@ def hand_type(TypeList1, TypeList2, pg):
 
 def get_dfncy(TypeList, pg, ke, km, optdfncy):
     '''Calculate the dfncy from the combined TypeList. '''
-    TL = TypeList[:]
-    # print('ha', len(TL))
+    # print('ha', len(TypeList))
 
     cost = 100
-    for i in range(len(TL)):
-        m,n,p,e,re,rm,em = TL[i] #the i-th type
+    for m,n,p,e,re,rm,em in TypeList: #read-only scan, no copy needed
         m += pg
         ''' n-e = (n-p) + (p-e) are valid pmelds, e out of p pairs cannot form pongs, 
            're' denotes if the eye can be formed from an existing unused tile '''
@@ -483,8 +575,6 @@ def get_dfncy(TypeList, pg, ke, km, optdfncy):
                     fit1 = n-1 + mcost*(4-m-n+1) #use a pair as the eye
                     fit2 = n + mcost*(4-m-n) + ecost #create the eye
                     fit = min(fit1,fit2)
-        if i==0: 
-            fit0 = fit
 
         if fit <= optdfncy: return fit
         if fit < cost: cost = fit
@@ -509,14 +599,29 @@ def singBlock(H,Pg,KB,dc):
 def dfncy(H, Pg, KB, dc):
     '''
     Input:
-        H (list): a sorted list of tiles in the hand of the player 
+        H (list): a sorted list of tiles in the hand of the player
         Pg (list): the pong or kong tile
         dc (int): the daque color
         KB (list): the knowledge base
     Output:
-        dfncy (int): the final deficiency 
+        dfncy (int): the final deficiency
     '''
-    H.sort(key=lambda x: x[0:2])
+    H.sort(key=lambda x: x[0:2]) #kept here: callers rely on this side effect
+    c1 = (dc+1) % 3
+    c2 = (dc+2) % 3
+    #the daque-suit entries of KB are never read by the computation
+    #(only KB1/KB2 and non-daque tiles are used), so exclude them from the key
+    key = (tuple(map(tuple, H)), tuple(map(tuple, Pg)),
+           tuple(KB[9*c1:9*c1+9]), tuple(KB[9*c2:9*c2+9]), dc)
+    result = _dfncy_cache.get(key)
+    if result is None:
+        result = _dfncy_impl(H, Pg, KB, dc)
+        if len(_dfncy_cache) >= _CACHE_LIMIT:
+            _dfncy_cache.clear()
+        _dfncy_cache[key] = result
+    return result
+
+def _dfncy_impl(H, Pg, KB, dc):
     c1 = (dc+1) %3
     c2 = (dc+2) %3
     NKB = [KB[0:9], KB[9:18], KB[18:27]]

@@ -31,7 +31,7 @@ class MahjongJudger(object):
         for player in players:
             if player.winning or player.daque_color == color or last_player == player.player_id:
                 continue
-            hand = deepcopy(player.hand)
+            hand = player.hand #read-only: only counted below
             # check kong
             if hand.count(last_card) == 3 and dealer.deck:
                 return 'kong', player, [last_card]*4
@@ -47,8 +47,8 @@ class MahjongJudger(object):
         '''
         if not dealer.deck:
             return False
-        
-        T = deepcopy(player.hand)
+
+        T = player.hand #tiles are never mutated in place, shallow read is safe
         Pg = [p[0] for p in player.pile]
         dc = player.daque_color
         # Q = [t[1] for t in T if t[0] == dc] #sl tiles of daque color
@@ -72,9 +72,8 @@ class MahjongJudger(object):
         '''
         if player.winning:
             return None
-            
-        T = deepcopy(player.hand)
-        T.append(cardx)
+
+        T = player.hand + [cardx]
         # Pg = [p[0] for p in player.pile]
         dc = player.daque_color
         #KB = [0]*27 #2020021113-sl: removed
@@ -96,8 +95,8 @@ class MahjongJudger(object):
         '''
         if player.winning:
             return None
-            
-        T = deepcopy(player.hand)
+
+        T = player.hand #read-only below
         # Pg = [p[0] for p in player.pile]
         dc = player.daque_color
         HD = [t for t in T if t[0] != dc]

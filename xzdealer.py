@@ -15,7 +15,7 @@ class MahjongDealer(object):
         #2020022709-sl: record all public information
         self.dqc = [-1]*4 # the daque color list of the four players
         self.win_info = [None]*4 # public win_info of each player: None, ['zimo', card, score], ['hu', card, score]
-        self.discard_lists = [[]]*4 # record each player's list of discarded tiles
+        self.discard_lists = [[] for _ in range(4)] # record each player's list of discarded tiles
         self.draw_times = [0]*4 # record each player's time of drawing a card from the Wall
         self.numWl = 55
         self.act_history = [] # record the action history of the game

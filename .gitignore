@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.DS_Store
+webgame/divergence_log.jsonl
+webgame/compare_results.jsonl
