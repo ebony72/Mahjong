@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>血战到底 · XueZhan Mahjong</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --felt:#1e6b46; --felt-dark:#155234; --tile-w:40px; --tile-h:56px;
+    --b:#0d3b25;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+       background:radial-gradient(ellipse at center,var(--felt) 0%,var(--felt-dark) 100%);
+       color:#fff; height:100vh; overflow:hidden; display:flex; flex-direction:column;}
+  header{display:flex; align-items:center; gap:12px; padding:8px 16px;
+         background:rgba(0,0,0,.25); font-size:14px;}
+  header select{border:0; border-radius:5px; padding:4px 6px; font-size:13px;
+                background:rgba(255,255,255,.9); color:#222;}
+  body.busy #myhand .tile,body.busy #buttons button{pointer-events:none;}
+  header h1{font-size:17px; font-weight:600; margin-right:8px;}
+  header .spacer{flex:1;}
+  button{border:0; border-radius:6px; padding:7px 14px; font-size:14px;
+         cursor:pointer; background:#e8c15a; color:#4a3200; font-weight:600;}
+  button:hover{filter:brightness(1.08);}
+  button.secondary{background:rgba(255,255,255,.18); color:#fff;}
+  button:disabled{opacity:.45; cursor:default;}
+  #layout{flex:1; display:flex; min-height:0;}
+  #tableArea{flex:1; display:grid; padding:8px; min-width:0; min-height:0;
+    grid-template-areas:"top top top" "left center right" "bottom bottom bottom";
+    grid-template-columns:150px minmax(0,1fr) 150px;
+    grid-template-rows:auto minmax(0,1fr) auto; gap:8px;}
+  .seat{background:rgba(0,0,0,.18); border-radius:10px; padding:8px; font-size:13px;
+        overflow:auto; min-height:0;}
+  .seat.active{outline:3px solid #ffd964;}
+  .seat .name{font-weight:600; margin-bottom:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+  .seat .winner{color:#ffd964;}
+  #seat1{grid-area:right;} #seat2{grid-area:top;} #seat3{grid-area:left;}
+  #seat0{grid-area:bottom; background:rgba(0,0,0,.28);}
+  #center{grid-area:center; background:rgba(0,0,0,.14); border-radius:12px;
+          display:flex; flex-direction:column; padding:10px; min-height:0;}
+  #wall{font-size:13px; opacity:.9; margin-bottom:6px;}
+  #discards{flex:1; display:flex; flex-wrap:wrap; align-content:flex-start; gap:3px; overflow:auto;}
+  .badge{display:inline-block; padding:1px 7px; border-radius:9px; font-size:11.5px;
+         background:rgba(255,255,255,.18);}
+  .badge.daque{background:#b8452f;}
+  .badge.score-pos{background:#2e7d4f;} .badge.score-neg{background:#8c3b3b;}
+  /* tiles */
+  .tile{display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+        width:var(--tile-w); height:var(--tile-h); border-radius:6px;
+        background:linear-gradient(#ffffff,#f0ead8); color:#222;
+        border:1px solid #b9ac8b; border-bottom-width:4px;
+        font-weight:700; user-select:none; position:relative; flex:none;}
+  .tile .num{font-size:19px; line-height:1.05;}
+  .tile .suit{font-size:13px; line-height:1;}
+  .tile.c0 .suit,.tile.c0 .num{color:#1e7d32;}
+  .tile.c1 .suit,.tile.c1 .num{color:#b02a2a;}
+  .tile.c2 .suit,.tile.c2 .num{color:#20539c;}
+  .tile.small{--tile-w:30px; --tile-h:42px;} .tile.small .num{font-size:14px;} .tile.small .suit{font-size:10.5px;}
+  .tile.mini{--tile-w:24px; --tile-h:34px;} .tile.mini .num{font-size:12px;} .tile.mini .suit{font-size:9px;}
+  .tile.back{background:linear-gradient(#3a7ab5,#2c5e8d); border-color:#1d4266;}
+  .tile.daqued{box-shadow:inset 0 0 0 2px #b8452f;}
+  .tile.clickable{cursor:pointer; transition:transform .08s;}
+  .tile.clickable:hover{transform:translateY(-8px); box-shadow:0 6px 10px rgba(0,0,0,.35);}
+  .tile.disabled{opacity:.45;}
+  .tile.hint{outline:3px solid #ffd964;}
+  .tile.last{outline:3px solid #ffd964; animation:pop .28s ease-out;}
+  @keyframes pop{0%{transform:scale(1.7); opacity:.2;} 100%{transform:scale(1); opacity:1;}}
+  .tilerow{display:flex; flex-wrap:wrap; gap:3px; align-items:flex-end;}
+  .meld{display:inline-flex; gap:1px; margin-right:8px; padding:2px; background:rgba(255,255,255,.12); border-radius:5px;}
+  /* my area */
+  #myhand{display:flex; gap:4px; margin:8px 0 4px; flex-wrap:wrap; align-items:flex-end; min-height:60px;}
+  #actionbar{display:flex; gap:8px; align-items:center; min-height:44px; flex-wrap:wrap;}
+  #prompt{font-size:15px; font-weight:600; color:#ffe9a8; display:flex; align-items:center; gap:8px;}
+  #log{width:215px; flex:none; background:rgba(0,0,0,.3); padding:10px; font-size:12.5px;
+       overflow-y:auto; display:flex; flex-direction:column-reverse;}
+  #log div{padding:2px 0; border-bottom:1px dashed rgba(255,255,255,.08); display:flex; align-items:center; gap:4px; flex-wrap:wrap;}
+  .mini-inline{display:inline-flex; vertical-align:middle;}
+  /* overlays */
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex;
+           align-items:center; justify-content:center; z-index:10;}
+  .panel{background:#204d38; border-radius:14px; padding:26px 30px; max-width:560px;
+         box-shadow:0 12px 40px rgba(0,0,0,.5);}
+  .panel h2{margin-bottom:14px; color:#ffd964;}
+  .panel .row{margin:10px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .hidden{display:none !important;}
+  table.scores{border-collapse:collapse; width:100%; margin-top:6px;}
+  table.scores td,table.scores th{padding:5px 10px; border-bottom:1px solid rgba(255,255,255,.15); font-size:14px; text-align:left;}
+</style>
+</head>
+<body>
+<header>
+  <h1>血战到底</h1>
+  <label>对手:
+    <select id="aiSel">
+      <option value="initial">初始策略 (7attr)</option>
+      <option value="advanced">高级策略 (strategyz)</option>
+    </select></label>
+  <label>速度:
+    <select id="speedSel">
+      <option value="300" selected>正常</option>
+      <option value="700">慢</option>
+      <option value="0">即时</option>
+    </select></label>
+  <span class="spacer"></span>
+  <span id="dfncyBox" class="badge"></span>
+  <button id="hintBtn" class="secondary">提示 Hint</button>
+  <button id="newBtn">新开一局 New game</button>
+</header>
+
+<div id="layout">
+  <div id="tableArea">
+    <div class="seat" id="seat2"></div>
+    <div class="seat" id="seat3"></div>
+    <div id="center">
+      <div id="wall"></div>
+      <div id="discards"></div>
+    </div>
+    <div class="seat" id="seat1"></div>
+    <div class="seat" id="seat0">
+      <div class="name" id="myName"></div>
+      <div class="tilerow" id="myPile"></div>
+      <div id="myhand"></div>
+      <div id="actionbar"><span id="prompt"></span><span id="buttons"></span></div>
+    </div>
+  </div>
+  <div id="log"></div>
+</div>
+
+<div class="overlay hidden" id="daqueOverlay">
+  <div class="panel">
+    <h2>定缺 — 选择一门要打缺的花色</h2>
+    <p style="font-size:13.5px; opacity:.85">整局中你必须先打光这门花色，胡牌时手中不能有它。</p>
+    <div class="row" id="daqueButtons"></div>
+    <p id="daqueHint" style="font-size:13px; color:#ffd964"></p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overOverlay">
+  <div class="panel">
+    <h2>本局结束</h2>
+    <div id="finalScores"></div>
+    <div class="row"><button onclick="newGame()">再来一局</button>
+    <button class="secondary" onclick="document.getElementById('overOverlay').classList.add('hidden')">看牌桌</button></div>
+  </div>
+</div>
+
+<script>
+const SUITS = ['条','万','筒'];
+const NAMES = {0:'你 (南)', 1:'AI·下家 (西)', 2:'AI·对家 (北)', 3:'AI·上家 (东)'};
+let S = null;          // last state from server
+let hintTile = null;
+
+function tileHTML(t, cls='', clickable=false){
+  if(!t) return '';
+  const c = t[0], n = t[1];
+  return `<div class="tile c${c} ${cls}" data-c="${c}" data-n="${n}">
+            <span class="num">${n}</span><span class="suit">${SUITS[c]}</span></div>`;
+}
+function backHTML(cls='small'){ return `<div class="tile back ${cls}"></div>`; }
+function sameTile(a,b){ return a && b && a[0]===b[0] && a[1]===b[1]; }
+
+async function api(path, body){
+  const opts = body ? {method:'POST', headers:{'Content-Type':'application/json'},
+                       body:JSON.stringify(body)} : {};
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if(!r.ok){ console.warn(j); return null; }
+  return j;
+}
+
+async function newGame(){
+  hintTile = null;
+  const seedStr = new URLSearchParams(location.search).get('seed');
+  const body = {ai: document.getElementById('aiSel').value};
+  if(seedStr !== null && seedStr !== '') body.seed = Number(seedStr);
+  S = await api('/api/new', body);
+  render();
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+async function stepLoop(){
+  /* replay AI turns one engine action at a time, pausing on visible moves */
+  document.body.classList.add('busy');
+  try{
+    while(S && S.stage === 'play' && !S.pending){
+      const before = S.history.length;
+      const st = await api('/api/step', {});
+      if(!st) break;
+      S = st; render();
+      if(!st.stepped) break;
+      const delay = +document.getElementById('speedSel').value;
+      if(delay && S.history.length > before) await sleep(delay);
+    }
+  } finally {
+    document.body.classList.remove('busy');
+    render();
+  }
+}
+
+async function act(body){
+  hintTile = null;
+  const st = await api('/api/act', body);
+  if(st) { S = st; render(); await stepLoop(); }
+}
+
+async function hint(){
+  if(!S || !S.pending) return;
+  const h = await api('/api/hint');
+  if(!h || !('action' in h)) return;
+  const a = h.action;
+  if(Array.isArray(a) && a.length===2 && typeof a[0]==='number'){
+    hintTile = a;                       // a tile to discard
+  } else {
+    const label = Array.isArray(a) ? a.join(' ') : a;
+    document.getElementById('prompt').innerHTML +=
+      ` <span class="badge" style="background:#6a5416">AI建议: ${label}</span>`;
+    return;
+  }
+  render(true);
+}
+
+function seatHTML(p){
+  const daque = p.daque===null? '' : `<span class="badge daque">缺${SUITS[p.daque]}</span>`;
+  const sc = `<span class="badge ${p.score>=0?'score-pos':'score-neg'}">${p.score>=0?'+':''}${p.score}</span>`;
+  const win = p.winning ? `<span class="winner">🏆已胡</span>` : '';
+  let html = `<div class="name">${NAMES[p.id]} ${daque} ${sc} ${win}</div>`;
+  html += `<div class="tilerow">`;
+  for(const meld of p.pile){
+    html += `<span class="meld">` + meld.map(t=>tileHTML(t,'mini')).join('') + `</span>`;
+  }
+  html += `</div>`;
+  if('hand' in p){        // revealed at game over
+    html += `<div class="tilerow" style="margin-top:5px">` +
+            p.hand.map(t=>tileHTML(t,'small')).join('') + `</div>`;
+  } else if('n_hand' in p){
+    html += `<div class="tilerow" style="margin-top:5px">` +
+            backHTML('mini').repeat(p.n_hand) + `</div>`;
+  }
+  return html;
+}
+
+function historyText(e){
+  const who = NAMES[e[0]].split(' ')[0];
+  const a = e[1];
+  const t = e[2];
+  const tl = t ? `<span class="mini-inline">${tileHTML(t,'mini')}</span>` : '';
+  const map = {draw:'摸牌', discard:'打出', pong:'碰', kong:'明杠', ankong:'暗杠',
+               jiakong:'加杠', zimo:'自摸', hu:'胡', robkong:'抢杠胡'};
+  let s = `${who} ${map[a]||a} ${a==='draw'?'':tl}`;
+  if(a==='hu') s += ` (点炮: ${NAMES[e[3]].split(' ')[0]})`;
+  if(a==='robkong') s += ` (被抢: ${NAMES[e[3]].split(' ')[0]})`;
+  return s;
+}
+
+function render(keepHint=false){
+  if(!keepHint) hintTile = null;
+  if(!S || S.stage==='none'){ return; }
+
+  // daque overlay
+  const dq = document.getElementById('daqueOverlay');
+  if(S.stage==='choose_daque'){
+    dq.classList.remove('hidden');
+    document.getElementById('daqueButtons').innerHTML =
+      [0,1,2].map(c=>`<button onclick="act({type:'daque',color:${c}})">打缺 ${SUITS[c]}</button>`).join('');
+    document.getElementById('daqueHint').textContent =
+      `AI 策略建议：缺${SUITS[S.daque_suggestion]}`;
+    // show hand in background too
+  } else {
+    dq.classList.add('hidden');
+  }
+
+  // seats 1..3 (highlight whoever acted last while AI turns replay)
+  const lastActor = S.history.length ? S.history[S.history.length-1][0] : null;
+  for(const p of S.opponents){
+    const el = document.getElementById('seat'+p.id);
+    el.innerHTML = seatHTML(p);
+    el.classList.toggle('active', S.stage==='play' && !S.pending && p.id===lastActor);
+  }
+  // my seat header
+  const me = S.you;
+  document.getElementById('myName').innerHTML =
+    `${NAMES[0]} ${me.daque!==null?`<span class="badge daque">缺${SUITS[me.daque]}</span>`:''}
+     <span class="badge ${me.score>=0?'score-pos':'score-neg'}">${me.score>=0?'+':''}${me.score}</span>
+     ${me.winning?'<span class="winner">🏆已胡</span>':''}`;
+  document.getElementById('myPile').innerHTML =
+    me.pile.map(meld=>`<span class="meld">`+meld.map(t=>tileHTML(t,'mini')).join('')+`</span>`).join('');
+
+  // deficiency badge
+  const dfb = document.getElementById('dfncyBox');
+  dfb.textContent = (me.deficiency===null || me.deficiency===undefined) ? '' :
+      (me.deficiency===0 ? '听牌!' : `向听数 (dfncy): ${me.deficiency}`);
+
+  // wall + discards
+  document.getElementById('wall').textContent =
+    `牌墙剩余 ${S.wall} 张 · 弃牌 ${S.table.length} 张`;
+  const disc = document.getElementById('discards');
+  disc.innerHTML = S.table.map((t,i)=>
+      tileHTML(t, 'small'+(i===S.table.length-1?' last':''))).join('');
+  disc.scrollTop = disc.scrollHeight;
+
+  // my hand
+  const pend = S.pending;
+  const discarding = pend && pend.type==='discard';
+  const allowed = discarding ? pend.allowed : [];
+  document.getElementById('myhand').innerHTML = me.hand.map(t=>{
+    let cls = '';
+    if(me.daque!==null && t[0]===me.daque) cls += ' daqued';
+    if(discarding){
+      cls += allowed.some(a=>sameTile(a,t)) ? ' clickable' : ' disabled';
+    }
+    if(hintTile && sameTile(hintTile,t)) cls += ' hint';
+    return tileHTML(t, cls, true);
+  }).join('');
+  if(discarding){
+    document.querySelectorAll('#myhand .tile.clickable').forEach(el=>{
+      el.onclick = ()=>act({type:'discard', tile:[+el.dataset.c, +el.dataset.n]});
+    });
+  }
+
+  // action buttons
+  const LBL = {pong:'碰', kong:'杠', hu:'胡', zimo:'自摸', robkong:'抢杠胡',
+               pass:'过', ankong:'暗杠', jiakong:'加杠'};
+  const btns = document.getElementById('buttons');
+  const promptEl = document.getElementById('prompt');
+  if(pend && pend.type==='choice'){
+    promptEl.innerHTML = pend.prompt +
+      (pend.tile?` <span class="mini-inline">${tileHTML(pend.tile,'mini')}</span>`:'');
+    btns.innerHTML = pend.options.map((o,i)=>{
+      const label = (LBL[o.label]||o.label) +
+        (o.tile?` ${o.tile[1]}${SUITS[o.tile[0]]}`:'');
+      return `<button data-i="${i}">${label}</button>`;
+    }).join(' ');
+    btns.querySelectorAll('button').forEach(b=>{
+      b.onclick = ()=>act({type:'action', action:pend.options[+b.dataset.i].action});
+    });
+  } else if(discarding){
+    promptEl.textContent = pend.prompt;
+    btns.innerHTML = '';
+  } else {
+    promptEl.textContent = S.stage==='over' ? '本局结束' : '';
+    btns.innerHTML = '';
+  }
+  document.getElementById('seat0').classList.toggle('active', !!pend);
+  document.getElementById('hintBtn').disabled = !pend;
+
+  // history log (newest first because of column-reverse)
+  document.getElementById('log').innerHTML =
+    S.history.map(e=>`<div>${historyText(e)}</div>`).join('');
+
+  // game over overlay
+  if(S.stage==='over'){
+    const rows = [S.you, ...S.opponents].map(p=>
+      `<tr><td>${NAMES[p.id]}</td><td>${p.score>=0?'+':''}${p.score}</td>
+       <td>${p.winning?'🏆 '+(p.hu_way||[]).join(', '):'未胡'}</td></tr>`).join('');
+    const dv = S.divergence || {n:0, agree:0};
+    const dvLine = dv.n ? `<p style="margin-top:10px; font-size:13.5px">你的决策与AI策略一致:
+        <b>${dv.agree}/${dv.n}</b> (${Math.round(100*dv.agree/dv.n)}%)</p>` : '';
+    document.getElementById('finalScores').innerHTML =
+      `<table class="scores"><tr><th>玩家</th><th>得分</th><th>结果</th></tr>${rows}</table>
+       ${dvLine}
+       ${S.error?`<p style="color:#f88">engine error — see server log</p>`:''}`;
+    document.getElementById('overOverlay').classList.remove('hidden');
+  } else {
+    document.getElementById('overOverlay').classList.add('hidden');
+  }
+}
+
+document.getElementById('newBtn').onclick = newGame;
+document.getElementById('hintBtn').onclick = hint;
+
+(async function init(){
+  S = await api('/api/state');
+  if(!S || S.stage==='none') await newGame(); else render();
+})();
+</script>
+</body>
+</html>
