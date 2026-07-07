@@ -3,10 +3,26 @@
 <head>
 <meta charset="utf-8">
 <title>血战到底 · XueZhan Mahjong</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <link rel="stylesheet" href="style.css">
+
+<!-- PWA / "Add to Home Screen" -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#155234">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="血战到底">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
+<div id="bootSplash">
+  <div class="spinner"></div>
+  <div id="bootText">加载中…</div>
+  <div style="font-size:12.5px; opacity:.75; max-width:320px">首次打开需要下载 Python 运行时（约 15-20 MB，建议 WiFi），之后可离线游玩</div>
+</div>
+
 <header>
   <h1>血战到底</h1>
   <label>对手:
@@ -72,7 +88,14 @@
   </div>
 </div>
 
-<script src="transport_fetch.js"></script>
+<script src="transport_pyodide.js"></script>
 <script src="game.js"></script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed', err));
+  });
+}
+</script>
 </body>
 </html>

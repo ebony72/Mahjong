@@ -52,6 +52,22 @@ Play in the browser: webgame/
   python3 webgame/server.py
   then open http://localhost:8765
 
+Play as an installable app, no server needed (Mac or iPhone), offline after
+first load:
+  https://ebony72.github.io/Mahjong/webgame/app.html
+  iPhone: open in Safari -> Share -> "Add to Home Screen"
+  Mac: open in Safari/Chrome, or pin as a web app
+This runs the exact same, unmodified Python engine client-side via Pyodide
+(Python compiled to WebAssembly) in a Web Worker, so it never needs a
+running server. First load fetches the Python runtime (~15-20MB, WiFi
+recommended); a service worker (webgame/sw.js) caches everything for
+offline play afterward. webgame/index.html (server-backed) and
+webgame/app.html (offline) share one UI (webgame/game.js) and one game core
+(webgame/game_core.py) -- only the transport differs, see CLAUDE.md.
+
+A native Mac app (血战到底.app, full native speed, no browser needed) can be
+built from webgame/mac_app/ -- see webgame/mac_app/README.md.
+
 You play seat 0 against three AI seats; pick the opponent strategy
 (initial, advanced, or defensive) from the dropdown. Features:
   - seeded deals (POST /api/new {"seed": N}) for reproducible games

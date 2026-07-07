@@ -13,7 +13,11 @@ design changes) — read it before revisiting any strategy-improvement idea.
   E.g. `python3 xzgame.py 0 10`.
 - Records are **appended** to `testRecord/` — empty it before comparison runs.
 - `python3 webgame/server.py [port]` — browser game: human at seat 0 vs three
-  AI seats (stdlib-only; default port 8765, honors `PORT` env). POST
+  AI seats (stdlib-only; default port 8765, honors `PORT` env). Serves
+  `webgame/index.html` at `/` (redirects there) over the HTTP API below, and
+  also serves the whole repo as static files (so `webgame/app.html`, the
+  offline PWA build, works identically under local dev and GitHub Pages —
+  see "Web app / PWA" below). POST
   `/api/new` accepts `{"seed": N, "ai": "initial"|"advanced"|"defensive"}`;
   `/api/hint` returns the strategy's move plus a ranked explanation table for
   discards (per candidate: dfncy after, availability-weighted effective-draw
@@ -56,6 +60,45 @@ design changes) — read it before revisiting any strategy-improvement idea.
   (multi-payer records store the per-payer amount — multiply by
   `len(rec[1])`). `--analyze FILE` reports paired per-seed diff stats
   (mean ± 95% CI) and per-category averages.
+
+## Web app / PWA (2026-07)
+Two entry points share one UI (`webgame/game.js`, ~600 lines) and one game
+core (`webgame/game_core.py`, the `GameSession` class extracted from
+`server.py`) — never duplicate either when changing behavior:
+- `webgame/index.html` — desktop, backed by `server.py` over HTTP
+  (`webgame/transport_fetch.js`). Full native Python speed. This is what
+  the native Mac app (see below) wraps.
+- `webgame/app.html` — **offline PWA** ("Add to Home Screen" on iPhone, or
+  pin as a web app on Mac). Runs the *unmodified* Python engine client-side
+  via Pyodide in a Web Worker (`webgame/worker.js` +
+  `webgame/transport_pyodide.js`), so AI "thinking" time never blocks the
+  UI thread. `webgame/pwa_bridge.py` mirrors `server.py`'s HTTP routes as
+  plain JSON-string functions — the two transports are the only code that
+  differs between entry points.
+- `webgame/sw.js` — service worker; precaches the app shell + all `.py`
+  engine sources at install so a second visit works fully offline. Bump
+  `CACHE_NAME` when any precached file's content changes.
+- Deployment: GitHub Pages serving the repo root (enabled 2026-07-07) — the
+  worker fetches Python sources via paths like `../dfncy/block_dfncy.py`
+  relative to its own URL, so Pages must serve the **whole repo**, not a
+  subfolder. Live at `https://ebony72.github.io/Mahjong/webgame/app.html`.
+- Verified 2026-07-07: cold boot (fresh Pyodide + engine load) ~3.6s on a
+  fast connection; a full `initial`-strategy game plays in ~1.2s once
+  booted; `strategyz`/`defensive` and the daily-challenge par computation
+  (a full 4-seat AI game) also run correctly, just slower (WASM is roughly
+  2-5x native). Default AI is `initial` for a snappy first PWA experience.
+- Gotcha hit during dev: the service worker cache-first-forever means a
+  buggy `worker.js` gets **permanently cached** after its first (crashing)
+  load — always `(await navigator.serviceWorker.getRegistrations()).forEach(r=>r.unregister())`
+  + `caches.keys().then(ks=>ks.forEach(caches.delete))` before testing a
+  worker.js/game_core.py/pwa_bridge.py change, or bump `CACHE_NAME`.
+
+## Native Mac app
+`webgame/mac_app/` builds `血战到底.app` — a PyInstaller + pywebview wrapper
+around the **existing** `server.py`/`index.html` (full native speed, no
+Pyodide). See `webgame/mac_app/README.md` for the build command and the
+unsigned-app Gatekeeper workaround; a paid Apple Developer ID is needed
+only for distributing a signed/notarized build to other people.
 
 ## Strategies
 - `strategy_initial21_7attr.py` — published baseline; deficiency via
