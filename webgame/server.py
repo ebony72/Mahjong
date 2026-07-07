@@ -31,8 +31,15 @@ import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_HERE)
+if getattr(sys, 'frozen', False):
+    #PyInstaller bundle (webgame/mac_app/): __file__ points inside the
+    #compiled PYZ archive, not real files on disk — static assets (index.html,
+    #style.css, game.js, transport_fetch.js) are copied to _MEIPASS instead
+    _ROOT = sys._MEIPASS
+    _HERE = os.path.join(_ROOT, 'webgame')
+else:
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+    _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _HERE)
 
 from game_core import GameSession, STRATEGIES, compute_daily_par

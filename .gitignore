@@ -6,3 +6,7 @@ webgame/divergence_log.jsonl
 webgame/compare_*.jsonl
 webgame/oracle_*.jsonl
 webgame/calibration_events.jsonl
+# native Mac app build output (regenerate with webgame/mac_app/build.sh)
+webgame/mac_app/build/
+webgame/mac_app/dist/
+webgame/mac_app/*.spec
