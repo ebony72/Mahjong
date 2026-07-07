@@ -22,6 +22,9 @@ from utils.xzutils import *
 #todo: future improve
 
 Oracle = False #change to True if we want to use the oracle of Phi
+HU_DECLINE_THRESHOLD = 1 #check_hu declines a dianpao win when zimo_factor
+                         #exceeds this; 1 is the original behavior (variants
+                         #may lower it — see strategy_huev.py)
 
 '''The player uses this strtegy to decide whether to hu/
    pong/kong/robkong/zimo and which card to discard
@@ -1000,11 +1003,11 @@ def check_hu(player, dealer, last_player, players):
 ##      %(numWl, n_hu, dc, c, TS, Pg, numS, KB, Phi)
 ##    print(content)
 
-    if zimo_factor > 1:
+    if zimo_factor > HU_DECLINE_THRESHOLD:
 ##        print('Final decision: stand')
         return 'stand'
 ##    print('Final decision: hu')
-    return 'hu'      
+    return 'hu'
             
 
 def check_pong(player, dealer, players):

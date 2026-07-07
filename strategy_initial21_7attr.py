@@ -239,12 +239,12 @@ def vec_discard_val(T, Pg, KB, dc):
     cur_dfncy = dfncy(T, Pg, KB, dc)
     TR = remove_duplicates(T) #the discard list
     
-    disc_list = TR[:] 
+    disc_list = TR[:]
     '''Remove kong tiles from the discard list'''
     for  x in TR:
-        if T.count(x) == 4 or x in Pg:       
-            disc_list.remove(x)   
-    if not disc_list: raise Exception ('All are kong tiles', T)
+        if T.count(x) == 4 or x in Pg:
+            disc_list.remove(x)
+    if not disc_list: disc_list = TR[:] #every tile backs a kong: discard one anyway
     '''A tile is essential is its removal increase the dfncy!'''
     '''Remove essential tiles from the discard list'''
     disc_listX = disc_list[:]
