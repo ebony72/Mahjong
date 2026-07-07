@@ -44,7 +44,57 @@ try:
     STRATEGIES['advanced'] = strategy_advanced
 except ImportError:
     strategy_advanced = None
+try:
+    #defense layer over the best available base strategy
+    import strategy_defense
+    STRATEGIES['defensive'] = strategy_defense
+except ImportError:
+    strategy_defense = None
+try:
+    #strategyz with a more decline-prone hu decision (oracle-motivated)
+    import strategy_huev
+    STRATEGIES['huev'] = strategy_huev
+except ImportError:
+    strategy_huev = None
 DIVERGENCE_LOG = os.path.join(_HERE, 'divergence_log.jsonl')
+
+
+def _unique(tiles):
+    out = []
+    for t in tiles:
+        if t not in out:
+            out.append(t)
+    return out
+
+
+def _settlement(p):
+    '''Itemized score movements of one player, from the engine ledgers.
+       The amounts sum exactly to p.myscore.'''
+    rows = []
+    for rec in p.scoreRecords:
+        others = rec[1] if isinstance(rec[1], list) else [rec[1]]
+        rows.append({'kind': rec[0], 'others': others, 'fan': rec[2],
+                     'amount': rec[-1] * len(others)})
+    for row in p.kongScore:
+        amt = row[2]
+        tags = [x for x in row[3:] if isinstance(x, str)]
+        if 'hujiaozhuanyi_income' in tags:
+            rows.append({'kind': 'zhuanyi_in', 'others': [row[1]],
+                         'tile': row[0], 'amount': amt})
+            continue
+        rows.append({'kind': 'kong', 'others': [row[1]],
+                     'tile': row[0], 'amount': amt})
+        for tag in tags:
+            if tag == 'beihujiaozhuanyi':
+                rows.append({'kind': 'zhuanyi_out', 'others': [row[1]],
+                             'tile': row[0], 'amount': -amt})
+            elif tag == 'beituishui':
+                rows.append({'kind': 'tuishui_out', 'others': [row[1]],
+                             'tile': row[0], 'amount': -amt})
+            elif tag == 'tuishui_return':
+                rows.append({'kind': 'tuishui_back', 'others': [row[1]],
+                             'tile': row[0], 'amount': -amt})
+    return rows
 
 
 class GameSession(object):
@@ -269,7 +319,12 @@ class GameSession(object):
         strat = self.strats[self.human]
         va = self.pending['valid_act']
         if va == 'discard':
-            return {'action': strat.select_a_card_to_discard(p, self.dealer, self.players)}
+            out = {'action': strat.select_a_card_to_discard(p, self.dealer, self.players)}
+            try:
+                out.update(self._hint_table())
+            except Exception:
+                traceback.print_exc()
+            return out
         if va == 'pong':
             return {'action': strat.check_pong(p, self.dealer, self.players)}
         if va == 'kong':
@@ -283,6 +338,87 @@ class GameSession(object):
         if va == 'robkong':
             return {'action': strat.check_robkong(p, self.dealer, self.round.jiakong_card, self.players)}
         return {'action': va}
+
+    # -------------------------------------------------------- explanations
+    def _hint_table(self):
+        '''Ranked, human-readable analysis of the current discard choice:
+           per candidate tile the deficiency after discarding it, the
+           availability-weighted count of effective draws (same measure the
+           initial strategy maximizes) and the deal-in danger estimate from
+           strategy_defense (if available).'''
+        p = self.players[self.human]
+        dc = p.daque_color
+        KB = p.kgbase(self.dealer, self.players)
+        Pg = [x[0] for x in p.pile]
+
+        def danger_map(cands):
+            if strategy_defense is None:
+                return {}
+            scored = strategy_defense.danger_of(cands, p, self.dealer,
+                                                self.players, KB)
+            return dict((tuple(t), round(d, 2)) for d, t in scored)
+
+        SUIT = ['条', '万', '筒']
+        SEAT = {1: '下家', 2: '对家', 3: '上家'}
+        opps = [q for q in self.players
+                if q.player_id != p.player_id and not q.winning]
+
+        def safety_notes(t):
+            notes = []
+            if all(t[0] == q.daque_color for q in opps):
+                notes.append('所有对手都缺%s，绝对安全' % SUIT[t[0]])
+                return notes
+            for q in opps:
+                who = SEAT.get(q.player_id, '对手')
+                if t[0] == q.daque_color:
+                    notes.append('%s缺%s，对其安全' % (who, SUIT[t[0]]))
+                elif t in self.dealer.discard_lists[q.player_id]:
+                    notes.append('%s自己打过此牌，较安全' % who)
+            return notes
+
+        daque_tiles = _unique([t for t in p.hand if t[0] == dc])
+        if daque_tiles:
+            dm = danger_map(daque_tiles)
+            rows = [{'tile': t, 'danger': dm.get(tuple(t), 0),
+                     'notes': safety_notes(t)[:3]} for t in daque_tiles]
+            rows.sort(key=lambda r: r['danger'])
+            return {'forced_daque': True, 'rows': rows}
+
+        HD = sorted(p.hand, key=lambda t: (t[0], t[1]))
+        cur = dfncy(HD, Pg, KB, dc)
+        cands = _unique(HD)
+        dm = danger_map(cands)
+        rows = []
+        for t in cands:
+            TX = HD[:]
+            TX.remove(t)
+            after = dfncy(TX, Pg, KB, dc)
+            eff = 0
+            detail = []         # the improving draws left: [[tile, count]...]
+            if after <= cur:
+                for c in range(3):
+                    if c == dc:
+                        continue
+                    for n in range(1, 10):
+                        x = [c, n]
+                        k = c * 9 + n - 1
+                        if x == t or KB[k] <= 0:
+                            continue
+                        T1 = sorted(TX + [x], key=lambda u: (u[0], u[1]))
+                        if dfncy(T1, Pg, KB, dc) == max(0, cur - 1):
+                            eff += KB[k]
+                            detail.append([x, KB[k]])
+            notes = []
+            if after <= cur and (HD.count(t) == 1 and not any(
+                    x != t and x[0] == t[0] and abs(x[1] - t[1]) <= 2
+                    for x in HD)):
+                notes.append('孤张，不成搭子')
+            notes += safety_notes(t)
+            rows.append({'tile': t, 'after': after, 'keeps': after <= cur,
+                         'eff': eff, 'detail': detail,
+                         'danger': dm.get(tuple(t), 0), 'notes': notes[:3]})
+        rows.sort(key=lambda r: (not r['keeps'], -r['eff'], r['danger']))
+        return {'forced_daque': False, 'cur_dfncy': cur, 'rows': rows}
 
     # -------------------------------------------------------------- state
     def _deficiency(self, p):
@@ -304,6 +440,7 @@ class GameSession(object):
         st = {
             'stage': self.stage,
             'seed': self.seed,
+            'daily': getattr(self, 'daily_seed', None),
             'ai': self.strategy_names[1],
             'game_id': self.game_id,
             'wall': len(self.dealer.deck),
@@ -341,12 +478,34 @@ class GameSession(object):
             }
             if self.stage == 'over':
                 opp['hand'] = sorted(p.hand, key=lambda t: (t[0], t[1]))
+                opp['settle'] = _settlement(p)
             st['opponents'].append(opp)
+        if self.stage == 'over':
+            st['you']['settle'] = _settlement(me)
+            st['decisions'] = self.decisions
         return st
 
 
 SESSION = None
 LOCK = threading.Lock()
+DAILY_PAR_CACHE = {}
+
+
+def compute_daily_par(seed):
+    '''Score the strongest AI gets playing seat 0 on this exact deal —
+       the "par" a daily-challenge player competes against.'''
+    if seed in DAILY_PAR_CACHE:
+        return DAILY_PAR_CACHE[seed]
+    ai = 'advanced' if 'advanced' in STRATEGIES else 'initial'
+    s = GameSession(seed=seed, strategies=[ai] * 4, human=None)
+    guard = 0
+    while s.stage != 'over' and guard < 2000:
+        if not s.step_once():
+            break
+        guard += 1
+    par = s.players[0].myscore
+    DAILY_PAR_CACHE[seed] = par
+    return par
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -396,11 +555,27 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._send(400, {'error': 'bad json'})
             return
+        if self.path.startswith('/api/daily_par'):
+            #computed outside LOCK: an all-AI game takes seconds and must not
+            #block state polling
+            with LOCK:
+                seed = getattr(SESSION, 'daily_seed', None) if SESSION else None
+            if seed is None:
+                self._send(400, {'error': 'no daily game'})
+            else:
+                self._send(200, {'seed': seed, 'par': compute_daily_par(seed)})
+            return
         with LOCK:
             try:
                 if self.path.startswith('/api/new'):
-                    SESSION = GameSession(seed=payload.get('seed'),
-                                          ai=payload.get('ai', 'initial'))
+                    if payload.get('daily'):
+                        seed = int(time.strftime('%Y%m%d'))
+                        ai = 'advanced' if 'advanced' in STRATEGIES else 'initial'
+                        SESSION = GameSession(seed=seed, ai=ai)
+                        SESSION.daily_seed = seed
+                    else:
+                        SESSION = GameSession(seed=payload.get('seed'),
+                                              ai=payload.get('ai', 'initial'))
                     self._send(200, SESSION.state())
                 elif self.path.startswith('/api/act'):
                     if SESSION is None:
@@ -424,6 +599,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    port = int(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PORT', 8765))
-    print('XueZhan mahjong prototype on http://localhost:%s' % port, flush=True)
-    ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
+    #default 0 lets the OS pick any free port; some environments pre-reserve
+    #common dev ports (8765/8766) for unrelated tooling
+    port = int(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PORT', 0))
+    try:
+        httpd = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    except OSError as e:
+        print('Could not bind port %s (%s). Try: python3 %s 0  (auto-picks a free port)'
+              % (port, e, sys.argv[0]), flush=True)
+        raise
+    actual_port = httpd.server_address[1]
+    print('XueZhan mahjong prototype on http://localhost:%s' % actual_port, flush=True)
+    httpd.serve_forever()
