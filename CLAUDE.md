@@ -2,6 +2,9 @@
 
 XueZhan (血战到底) Mahjong engine + baseline strategy from "Let's Play Mahjong!"
 (arXiv:1903.03294); the deficiency (dfncy) calculator implements arXiv:2108.06832.
+`docs/2026-07-theory-and-design.md` is the full technical note for the 2026-07
+work (benchmark methodology, defense/oracle/hu-threshold studies with numbers,
+design changes) — read it before revisiting any strategy-improvement idea.
 
 ## Run
 - `python3 xzgame_generator.py` — generate a batch of initial games.
@@ -11,26 +14,77 @@ XueZhan (血战到底) Mahjong engine + baseline strategy from "Let's Play Mahjo
 - Records are **appended** to `testRecord/` — empty it before comparison runs.
 - `python3 webgame/server.py [port]` — browser game: human at seat 0 vs three
   AI seats (stdlib-only; default port 8765, honors `PORT` env). POST
-  `/api/new` accepts `{"seed": N, "ai": "initial"|"advanced"}`; `/api/hint`
-  returns the strategy's move for the human's decision; POST `/api/step`
-  advances the engine one action (the UI uses it to pace AI turns). Every
-  human decision is appended to `webgame/divergence_log.jsonl` together with
-  the strategy's choice (human-vs-AI divergence data; gitignored).
-- `python3 webgame/compare_ai.py [n_seeds]` — head-to-head benchmark of the
-  two strategies, seat-swapped per seed to cancel position bias.
+  `/api/new` accepts `{"seed": N, "ai": "initial"|"advanced"|"defensive"}`;
+  `/api/hint` returns the strategy's move plus a ranked explanation table for
+  discards (per candidate: dfncy after, availability-weighted effective-draw
+  count, deal-in danger from strategy_defense); POST `/api/step` advances the
+  engine one action (the UI uses it to pace AI turns). At game over the state
+  carries per-player `settle` (itemized ledger via `_settlement`, sums exactly
+  to myscore) and `decisions` (the divergence log) — the UI renders a
+  settlement panel with rule explanations and a review of human-vs-AI
+  disagreements. POST `/api/new {"daily": true}` starts the daily challenge
+  (seed = YYYYMMDD, advanced opponents); POST `/api/daily_par` returns the
+  advanced AI's seat-0 score on the same deal (computed outside the session
+  LOCK, cached per seed). Every human decision is appended to
+  `webgame/divergence_log.jsonl` together with the strategy's choice
+  (human-vs-AI divergence data; gitignored).
+- `python3 webgame/rollout_oracle.py [n_games] [--rollouts K] [--cands C]` —
+  determinized MC oracle: at sampled free-choice discard decisions of
+  all-advanced games, reshuffles hidden tiles (winners' revealed hands fixed,
+  daque-consistency enforced) and rolls out every candidate to game end
+  (decision seat continues with advanced, opponents with initial). Reports
+  raw and cross-validated regret of the advanced discard choice; results in
+  `webgame/oracle_results.jsonl`. `--mode reaction` oracle-tests
+  pong/kong/zikong/hu/zimo prompts (`webgame/oracle_reactions.jsonl`).
+  **Verdicts (2026-07-07):** discards cv-regret -0.05 ± 0.20 (near-optimal;
+  raw regret is winner's-curse bias — always report cv). Reactions: pong /
+  zikong / zimo validated; hu *declines* validated (-0.07); hu *accepts*
+  showed +1.6 ± 0.5 apparent regret — but lowering the decline threshold
+  (strategy_huev.py, zimo_factor > 0.6) benchmarked at exactly zero over
+  2000 seeds: the promised zimo income (+0.35/game) materialized and was
+  fully offset by extra dianpao and beizimo exposure from waiting. Lesson:
+  reaction-oracle EVs with initial-strategy opponents overestimate the value
+  of waiting; every oracle finding must be benchmark-confirmed before
+  adoption. The kong signal (+0.71 at n=50) resolved to zero at n=126
+  (`webgame/oracle_kong.jsonl`, `--only kong,zikong,robkong`). All
+  policy-level attacks on strategyz (defense layer, discard oracle, hu
+  threshold, kong/zikong) now confirm it is locally near-optimal.
+- `python3 webgame/compare_ai.py [n_seeds] [stratA] [stratB] [--workers N]`
+  — parallel head-to-head benchmark, seat-swapped per seed to cancel position
+  bias. Appends one JSON line per game (partial runs analyzable) including an
+  income breakdown per seat reconstructed from `scoreRecords`/`kongScore`
+  (multi-payer records store the per-payer amount — multiply by
+  `len(rec[1])`). `--analyze FILE` reports paired per-seed diff stats
+  (mean ± 95% CI) and per-category averages.
 
 ## Strategies
 - `strategy_initial21_7attr.py` — published baseline; deficiency via
   `dfncy/block_dfncy.py` (fast, arXiv:2108.06832).
 - `strategyz0614.py` — the advanced strategy (ported 2026-07 from the private
   `XuezhanEasyRead2021` snapshot; only imports were changed to `utils.*`
-  paths). **Deliberately unpublished — never push `strategyz0614.py` /
-  `hytreekong.py` to the public remote.** They live in their own commit so
-  earlier commits can be pushed without them; `webgame/server.py` imports
-  them optionally and falls back to the initial strategy. Its deficiency calculator is `hytreekong.hyval` (tree search, now
+  paths). **Published to the public repo as of 2026-07-07** (originally kept
+  private; the owner decided to publish both it and `hytreekong.py`).
+  `webgame/server.py` still imports them optionally and falls back to the
+  initial strategy on checkouts without them. Its deficiency calculator is `hytreekong.hyval` (tree search, now
   memoized at top level like dfncy — do not mutate its cached inputs). It can
   *decline* a hu (expected-value zimo_factor), so the engine's hu/zimo/robkong
   decisions must be routed through the strategy module, not hardcoded.
+- `strategy_defense.py` — defense layer (`defensive` in the server) wrapping
+  the best available base strategy (strategyz0614 if present, else initial):
+  threat-weighted per-tile danger from public info only (daque suits are
+  provably safe, wait-shape counting vs unseen tiles, opponents' own discards
+  discounted, flush read from single-suit melds). **Benchmark verdict
+  (2026-07-07): heuristic discard-level defense does NOT beat plain
+  strategyz** — fold-heavy v1 and calibrated v2 lost significantly
+  (v2: -2.65/seed-pair, CI [-4.53,-0.78], n=1500); the current near-zero-cost
+  v3 is statistically neutral (-0.58, CI [-1.90,+0.74], n=800). Measured
+  reasons: only ~2.6% of discards deal in; ~40% of deal-ins are forced
+  single-choice daque discards; a dodged deal-in often converts to the
+  opponent's zimo (doubled, all three pay); reordering daque discards feeds
+  opponents' melds; and quiet waits cut one's own dianpao-win income. Don't
+  re-tune knobs — the next lever is a *learned* danger model (training data:
+  `webgame/calibration_events.jsonl`, per-discard danger vectors + deal-in
+  labels from all-advanced games).
 
 ## Determinism / verifying refactors
 Game play is fully deterministic once the hands/wall are loaded from the batch
@@ -42,6 +96,16 @@ trajectory format still reproduces; the verbose `game_N.txt` log format has
 drifted since they were generated).
 
 ## Performance notes (2026-07)
+- Investigated further dfncy speedups (2026-07-07): a per-suit lookup table is
+  blocked by KB-awareness (break points, pchow feasibility and reservations
+  all read KB — the paper's core feature), and Python micro-optimization is
+  exhausted: with memoization in place the profile is flat (~4M small ops, no
+  hot spot; get_type dedup by aggregate signature + remainder caching gave
+  zero wall-clock gain and was reverted). Real speedups require a C/Cython
+  port or a DP rewrite — verify any such attempt with the fuzz method:
+  `git show HEAD:dfncy/block_dfncy.py` as reference, compare outputs on
+  ~20k random (hand, Pg, KB, dc) states plus replay of recorded benchmark
+  games.
 - `dfncy()` dominates runtime (~90%): each discard decision evaluates roughly
   |discard candidates| × ~18 replacement tiles candidate hands.
 - `dfncy/block_dfncy.py` memoizes at 5 levels (dfncy, max_pure_type, typeset,

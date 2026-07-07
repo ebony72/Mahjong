@@ -19,11 +19,18 @@ You may then find the game records in /testRecord/
 -- strategy_initial21_7attr.py is the basic published strategy
 -- strategyz0614.py is a more advanced strategy (deliberately kept out of
    earlier releases; both are now here for comparison)
+-- strategy_defense.py adds a defensive layer ("defensive") on top of the
+   best available base strategy: it estimates per-tile deal-in danger from
+   public information and folds / re-picks discards when an opponent looks
+   threatening
 -- dfncy/ the dfncy calculator is block_dfncy.py, see Ref. [yan2021fast]
    (https://arxiv.org/abs/2108.06832); used by strategy_initial21_7attr.py
 -- hytreekong.py is a second, tree-search deficiency calculator (hyval),
    used by strategyz0614.py
 -- utils/ contains all utilities we need
+-- docs/2026-07-theory-and-design.md documents the 2026-07 evaluation
+   methodology, the strategy-validation studies (benchmarks, deal-in
+   calibration, rollout oracles) and all webgame design changes
 
 Both dfncy/block_dfncy.py and hytreekong.py are memoized: a discard decision
 evaluates near-identical hands hundreds of times, so caching the block/suit
@@ -43,16 +50,29 @@ Play in the browser: webgame/
   then open http://localhost:8765
 
 You play seat 0 against three AI seats; pick the opponent strategy
-(initial or advanced) from the dropdown. Features:
+(initial, advanced, or defensive) from the dropdown. Features:
   - seeded deals (POST /api/new {"seed": N}) for reproducible games
-  - a Hint button showing what the selected strategy would do
+  - an explainable Hint: the strategy's move plus a ranked analysis of every
+    candidate discard (effective draws, dfncy effect, deal-in danger)
   - a live deficiency (dfncy) readout for your hand
   - paced AI-turn replay with a speed selector
+  - a full settlement panel at game end (itemized who-paid-whom with fan
+    counts, and explanations of chadajiao / chahuazhu / tuishui / hujiao-
+    zhuanyi) plus a review of the hands where you diverged from the AI
+  - a daily challenge (每日挑战): everyone plays the same date-seeded deal
+    and is scored against the "par" the advanced AI achieves in the same
+    seat on the identical deal (duplicate-mahjong style)
   - every human decision is logged next to the strategy's choice, to
     webgame/divergence_log.jsonl, for studying human-vs-AI divergence
 
-webgame/compare_ai.py runs a seat-swapped strategy-vs-strategy benchmark:
-  python3 webgame/compare_ai.py 200
+webgame/rollout_oracle.py measures the EV headroom of the advanced
+strategy's discards with determinized Monte-Carlo rollouts:
+  python3 webgame/rollout_oracle.py 100 --rollouts 16 --cands 4
+
+webgame/compare_ai.py runs a seat-swapped strategy-vs-strategy benchmark
+(parallel; paired per-seed statistics and an income-source breakdown):
+  python3 webgame/compare_ai.py 200 advanced initial --workers 6
+  python3 webgame/compare_ai.py --analyze webgame/compare_advanced_vs_initial.jsonl
 ____________________________________________
 @misc{li2019lets,
       title={Let's Play Mahjong!},
