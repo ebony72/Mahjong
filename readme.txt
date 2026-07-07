@@ -17,12 +17,15 @@ To play a batch of games, run xzgame.py [changshu] [n_GAME], where
 You may then find the game records in /testRecord/
 
 -- strategy_initial21_7attr.py is the basic published strategy
--- strategyz0614.py is a more advanced strategy (deliberately kept out of
-   earlier releases; both are now here for comparison)
+-- strategyz0614.py is a more advanced strategy (kept private since 2021,
+   published here in 2026-07)
 -- strategy_defense.py adds a defensive layer ("defensive") on top of the
    best available base strategy: it estimates per-tile deal-in danger from
    public information and folds / re-picks discards when an opponent looks
-   threatening
+   threatening (benchmarked neutral — kept as a research scaffold)
+-- strategy_huev.py ("huev") is strategyz with a lower hu-decline
+   threshold; benchmarked at exactly zero vs plain strategyz over 2000
+   paired seeds (see docs/2026-07-theory-and-design.md §6)
 -- dfncy/ the dfncy calculator is block_dfncy.py, see Ref. [yan2021fast]
    (https://arxiv.org/abs/2108.06832); used by strategy_initial21_7attr.py
 -- hytreekong.py is a second, tree-search deficiency calculator (hyval),
