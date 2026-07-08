@@ -84,6 +84,13 @@ button:disabled{opacity:.45; cursor:default;}
 .panel h2{margin-bottom:14px; color:#ffd964;}
 .panel .row{margin:10px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
 .hidden{display:none !important;}
+#rulesOverlay{z-index:11;} /* openable on top of daque/game-over overlays */
+#rulesBtn{position:relative; z-index:12;} /* stays clickable even while a blocking overlay covers the header */
+/* rules panel */
+.rules h3{color:#ffd964; font-size:14.5px; margin:14px 0 6px;}
+.rules h3:first-child{margin-top:0;}
+.rules ul{padding-left:18px; font-size:13px; line-height:1.65; opacity:.95;}
+.rules li{margin-bottom:7px;}
 table.scores{border-collapse:collapse; width:100%; margin-top:6px;}
 table.scores td,table.scores th{padding:5px 10px; border-bottom:1px solid rgba(255,255,255,.15); font-size:14px; text-align:left;}
 /* explainable hint */

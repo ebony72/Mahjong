@@ -25,6 +25,7 @@
     </select></label>
   <span class="spacer"></span>
   <span id="dfncyBox" class="badge"></span>
+  <button id="rulesBtn" class="secondary" onclick="document.getElementById('rulesOverlay').classList.remove('hidden')">规则说明</button>
   <button id="hintBtn" class="secondary">提示 Hint</button>
   <button id="dailyBtn" class="secondary">每日挑战</button>
   <button id="newBtn">新开一局 New game</button>
@@ -50,6 +51,38 @@
     </div>
   </div>
   <div id="log"></div>
+</div>
+
+<div class="overlay hidden" id="rulesOverlay">
+  <div class="panel wide">
+    <h2>玩法与计分规则</h2>
+    <div class="rules">
+      <h3>玩法 — 血战到底（四川麻将，无字牌）</h3>
+      <ul>
+        <li>只有条、万、筒三门花色，没有字牌。4 人游戏，每人起手 13 张牌。</li>
+        <li><b>定缺</b>：开局需选择一门花色作为"缺"，整局必须把这门花色的牌全部打光，胡牌时手上不能再有它。</li>
+        <li><b>目标</b>：凑成 4 组顺子/刻子 + 1 对将牌即可胡牌；也可七对、金钩钓、清一色、碰碰胡等特殊牌型。</li>
+        <li><b>血战到底</b>：一人胡牌后其他人继续打，直到 3 人胡牌或牌墙摸完，一局才结束（不同于胡了就停的打法）。</li>
+        <li>每回合：摸牌 → 检查自摸/暗杠/加杠 → 打牌 → 其他家检查碰/杠/胡。杠牌后要补摸一张。</li>
+        <li><b>抢杠胡</b>：别人加杠时，如果这张牌正好让你胡牌，可以抢先胡走。</li>
+      </ul>
+      <h3>计分 — 番数与支付</h3>
+      <ul>
+        <li>基础 1 番 = 1 分（普通「平胡」）。以下加成可叠加相乘：
+          自摸 ×2 · 杠上花/杠上炮 ×2 · 抢杠胡 ×2 · 碰碰胡 ×2 · 七对 ×4 · 金钩钓 ×4 · 清一色 ×4 ·
+          每有一「根」(暗杠或杠成的 4 张同牌) ×2。天胡/地胡固定 32 番。</li>
+        <li><b>点炮</b>：点炮者一人赔付番数分给胡牌者。</li>
+        <li><b>自摸</b>：其余三家各赔付番数分给胡牌者。</li>
+        <li><b>杠</b>：暗杠由其余三家各付 2 分；明杠（直接杠别人打出的牌）由点杠者一人付 2 分；
+          加杠（碰过后再摸/补到第 4 张）由其余三家各付 1 分。</li>
+        <li><b>呼叫转移</b>：杠后打出的牌被别人胡走（杠上炮），这个杠的收入转给胡牌者。</li>
+        <li><b>退税</b>：流局时，杠过牌但最终未听牌的玩家要退还杠分。</li>
+        <li><b>查大叫</b>：流局时，听牌的玩家按自己能胡的最大番数向未听牌的玩家收分。</li>
+        <li><b>查花猪</b>：流局时，手上仍留有缺色牌的玩家要赔 16 分。</li>
+      </ul>
+    </div>
+    <div class="row"><button class="secondary" onclick="document.getElementById('rulesOverlay').classList.add('hidden')">我知道了</button></div>
+  </div>
 </div>
 
 <div class="overlay hidden" id="daqueOverlay">
