@@ -143,13 +143,17 @@ details.settle .line{display:flex; justify-content:space-between; gap:10px; padd
 }
 
 /* phones are landscape-only: portrait on a touch device shows a rotate
-   prompt (the installed PWA is already locked landscape via the manifest) */
+   prompt. No manifest orientation lock (removed — on iOS a manifest
+   "orientation" lock for a standalone-launched PWA can fight this CSS
+   query and leave it stuck reading stale state after a physical rotate). */
 #rotateOverlay{display:none; position:fixed; inset:0; z-index:60;
   background:var(--felt-dark); flex-direction:column; align-items:center;
   justify-content:center; gap:14px; text-align:center; font-size:17px;
   line-height:1.6; color:#ffe9a8; padding:24px;}
 #rotateOverlay .icon{font-size:46px; animation:rotphone 1.8s ease-in-out infinite;}
 @keyframes rotphone{0%,15%{transform:rotate(0);} 55%,100%{transform:rotate(90deg);}}
+#rotateOverlay .skip{background:none; border:1px solid rgba(255,255,255,.4);
+  color:#ffe9a8; font-size:13px; padding:6px 14px; margin-top:4px;}
 @media (orientation:portrait) and (max-width:920px){
   #rotateOverlay{display:none;}
   body.touch #rotateOverlay{display:flex;}   /* JS sets .touch on touch devices */
@@ -157,6 +161,9 @@ details.settle .line{display:flex; justify-content:space-between; gap:10px; padd
 @media (orientation:portrait) and (pointer:coarse) and (max-width:920px){
   #rotateOverlay{display:flex !important;}
 }
+/* escape hatch: never truly trap anyone if orientation detection misbehaves
+   on some device — higher specificity than the rules above, wins regardless */
+body.force-portrait #rotateOverlay{display:none !important;}
 
 /* landscape phones: compact everything vertically so table + hand fit */
 @media (orientation:landscape) and (max-height:520px){
