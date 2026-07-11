@@ -6,7 +6,7 @@
 html,body{height:100%;}
 body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
      background:radial-gradient(ellipse at center,var(--felt) 0%,var(--felt-dark) 100%);
-     color:#fff; height:100vh; overflow:hidden; display:flex; flex-direction:column;
+     color:#fff; height:100vh; height:100dvh; overflow:hidden; display:flex; flex-direction:column;
      -webkit-user-select:none; user-select:none;
      padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
 header{display:flex; align-items:center; gap:12px; padding:8px 16px;
@@ -103,6 +103,15 @@ table.scores td,table.scores th{padding:5px 10px; border-bottom:1px solid rgba(2
 #hintDetail{margin-top:6px; font-size:13px; line-height:1.5; color:#ffe9a8;
             max-width:900px;}
 .dgr-lo{color:#9fe3a9;} .dgr-mid{color:#ffe08a;} .dgr-hi{color:#ff9d8a;}
+/* coach mode */
+header .coach-toggle{display:flex; align-items:center; gap:4px; cursor:pointer;}
+header .coach-toggle input{accent-color:#e8c15a;}
+#coachBox{margin-top:6px; font-size:12.5px; line-height:1.55;
+          background:rgba(0,0,0,.22); border-radius:8px; padding:6px 10px;}
+#coachBox:empty{display:none;}
+.coach-title{font-weight:600; color:#ffd964; margin-bottom:2px; font-size:12px;}
+.coach-line{border-top:1px dashed rgba(255,255,255,.1); padding:2px 0;
+            display:flex; align-items:center; gap:4px; flex-wrap:wrap;}
 /* settlement + review */
 .panel.wide{max-width:680px; max-height:88vh; overflow:auto;}
 details.settle{margin-top:8px; font-size:13px;}
@@ -131,4 +140,54 @@ details.settle .line{display:flex; justify-content:space-between; gap:10px; padd
   #tableArea{grid-template-columns:78px minmax(0,1fr) 78px;}
   .seat{padding:5px; font-size:11px;}
   .panel{padding:18px 16px;}
+}
+
+/* phones are landscape-only: portrait on a touch device shows a rotate
+   prompt (the installed PWA is already locked landscape via the manifest) */
+#rotateOverlay{display:none; position:fixed; inset:0; z-index:60;
+  background:var(--felt-dark); flex-direction:column; align-items:center;
+  justify-content:center; gap:14px; text-align:center; font-size:17px;
+  line-height:1.6; color:#ffe9a8; padding:24px;}
+#rotateOverlay .icon{font-size:46px; animation:rotphone 1.8s ease-in-out infinite;}
+@keyframes rotphone{0%,15%{transform:rotate(0);} 55%,100%{transform:rotate(90deg);}}
+@media (orientation:portrait) and (max-width:920px){
+  #rotateOverlay{display:none;}
+  body.touch #rotateOverlay{display:flex;}   /* JS sets .touch on touch devices */
+}
+@media (orientation:portrait) and (pointer:coarse) and (max-width:920px){
+  #rotateOverlay{display:flex !important;}
+}
+
+/* landscape phones: compact everything vertically so table + hand fit */
+@media (orientation:landscape) and (max-height:520px){
+  :root{--tile-w:34px; --tile-h:46px;}
+  header{padding:3px 8px; gap:6px; font-size:12px;}
+  header h1{display:none;}
+  header select{font-size:11.5px; padding:2px 4px;}
+  button{padding:4px 9px; font-size:12px; border-radius:5px;}
+  #tableArea{grid-template-columns:104px minmax(0,1fr) 104px; gap:5px; padding:5px;}
+  .seat{padding:4px 6px; font-size:10.5px;}
+  .seat .name{margin-bottom:2px;}
+  .tile.small{--tile-w:24px; --tile-h:34px;}
+  .tile.small .num{font-size:12px;} .tile.small .suit{font-size:9px;}
+  .tile.mini{--tile-w:19px; --tile-h:27px;}
+  .tile.mini .num{font-size:10px;} .tile.mini .suit{font-size:8px;}
+  #center{padding:6px;}
+  #nowBar{min-height:30px; font-size:12.5px; padding:3px 8px; margin-bottom:4px;}
+  #wall{font-size:11px; margin-bottom:3px;}
+  #log{width:148px; padding:6px; font-size:11px;}
+  #myhand{margin:4px 0 2px; min-height:50px; gap:3px;}
+  #actionbar{min-height:34px; gap:6px;}
+  #prompt{font-size:13px;}
+  #hintDetail{font-size:11.5px; margin-top:4px;}
+  #coachBox{font-size:11px; padding:4px 8px; margin-top:4px;}
+  .hcand{padding:3px 5px 2px; font-size:10px;}
+  .panel{padding:14px 16px; max-height:94vh; max-height:94dvh;}
+  .panel h2{font-size:16px; margin-bottom:8px;}
+  /* keep the table visible: my seat caps its height and scrolls inside,
+     instead of squeezing the center row to nothing */
+  #tableArea{grid-template-rows:auto minmax(64px,1fr) auto;}
+  #seat0{max-height:56vh; max-height:56dvh; overflow:auto;}
+  #coachBox{max-height:76px; overflow:auto;}
+  #hintDetail{max-height:44px; overflow:auto;}
 }

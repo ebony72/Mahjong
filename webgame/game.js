@@ -93,13 +93,128 @@ async function hint(){
   const a = h.action;
   if(Array.isArray(a) && a.length===2 && typeof a[0]==='number'){
     hintTile = a;                       // a tile to discard
+    render(true);
+    renderHintPanel(h);
   } else {
-    document.getElementById('prompt').innerHTML +=
-      ` <span class="badge" style="background:#6a5416">AI建议: ${actHTML(a)}</span>`;
-    return;
+    const pr = document.getElementById('prompt');
+    if(!pr.querySelector('.ai-adv'))
+      pr.innerHTML += ` <span class="badge ai-adv" style="background:#6a5416">AI建议: ${actHTML(a)}</span>`;
+    if(h.why) document.getElementById('hintDetail').innerHTML = `💡 ${h.why}`;
   }
-  render(true);
-  renderHintPanel(h);
+  renderCoach(h.opps);
+}
+
+/* ---------------- sound effects (no assets: WebAudio + speech) --------- */
+let soundOn = localStorage.getItem('sound') !== '0';
+let AC = null;
+function ac(){
+  if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if(AC.state === 'suspended') AC.resume();
+  return AC;
+}
+// browsers only allow audio after a user gesture: warm the context up early
+document.addEventListener('pointerdown', ()=>{ if(soundOn) try{ac();}catch(e){} });
+
+function tileClick(){          // short "tile hits the table" tick
+  if(!soundOn) return;
+  try{
+    const ctx = ac(), t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(1750, t);
+    o.frequency.exponentialRampToValueAtTime(650, t + .06);
+    g.gain.setValueAtTime(.22, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .09);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + .1);
+  }catch(e){}
+}
+function winChime(){           // rising arpeggio for a win
+  if(!soundOn) return;
+  try{
+    const ctx = ac(), t0 = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i)=>{
+      const t = t0 + i * .11;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(.18, t);
+      g.gain.exponentialRampToValueAtTime(.001, t + .3);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + .32);
+    });
+  }catch(e){}
+}
+function speak(txt){           // voiced call: 碰 / 杠 / 胡 / 自摸
+  if(!soundOn || typeof speechSynthesis === 'undefined') return;
+  try{
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = 'zh-CN'; u.rate = 1.15; u.pitch = 1.1; u.volume = 1;
+    const v = speechSynthesis.getVoices().find(v=>/^zh/i.test(v.lang));
+    if(v) u.voice = v;
+    speechSynthesis.cancel();  // a fresh call preempts a stale one
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+const VOICE = {pong:'碰', kong:'杠', ankong:'杠', jiakong:'杠',
+               hu:'胡', zimo:'自摸', robkong:'抢杠，胡'};
+let sndGame = null, sndSeen = 0;
+function playNewSounds(){
+  /* voice/effects for history entries added since the last render; on a new
+     game (or page load) just sync the cursor so nothing replays */
+  if(!S || !S.history) return;
+  if(S.game_id !== sndGame){ sndGame = S.game_id; sndSeen = S.history.length; return; }
+  const fresh = S.history.slice(sndSeen);
+  sndSeen = S.history.length;
+  if(!fresh.length || !soundOn) return;
+  let clicked = false, voice = null, won = false;
+  for(const e of fresh){
+    const a = e[1];
+    if(a === 'discard') clicked = true;
+    if(VOICE[a]) voice = VOICE[a];
+    if(a === 'hu' || a === 'zimo' || a === 'robkong') won = true;
+  }
+  if(clicked) tileClick();     // one tick per batch, not a burst
+  if(voice) speak(voice);
+  if(won) winChime();
+}
+
+/* ---------------- coach mode: auto-hint + opponent read ---------------- */
+let coachOn = localStorage.getItem('coach') === '1';
+let lastCoachKey = null;
+
+function maybeAutoHint(){
+  if(!coachOn || !S || S.stage !== 'play' || !S.pending) return;
+  const key = `${S.game_id}:${S.history.length}:${S.pending.valid_act}`;
+  if(key === lastCoachKey) return;
+  lastCoachKey = key;
+  hint();
+}
+
+function readyLabel(t){
+  return t >= 0.75 ? ['高', 'dgr-hi'] : (t >= 0.5 ? ['中', 'dgr-mid'] : ['低', 'dgr-lo']);
+}
+
+function renderCoach(opps){
+  const box = document.getElementById('coachBox');
+  if(!box) return;
+  if(!opps || !opps.length){ box.innerHTML = ''; return; }
+  box.innerHTML =
+    `<div class="coach-title">对手估计（只用公开信息推断，不偷看手牌）</div>` +
+    opps.map(o=>{
+      const who = NAMES[o.id];
+      if(o.winning) return `<div class="coach-line">${who}：已胡牌，无威胁</div>`;
+      const [lbl, cls] = readyLabel(o.threat);
+      const hot = (o.hot && o.hot.length)
+        ? '对其危险: ' + o.hot.map(h=>
+            `<span class="mini-inline">${tileHTML(h[0],'mini')}</span>`).join('')
+        : '你手中暂无明显危险牌';
+      const flush = (o.flush !== undefined)
+        ? ` · <span class="dgr-hi">⚠️疑似清一色(${SUITS[o.flush]})</span>` : '';
+      return `<div class="coach-line">${who}：听牌可能 <b class="${cls}">${lbl}</b>
+        (${Math.round(o.threat*100)}%) · 副露${o.n_melds}组${flush}
+        · 缺${SUITS[o.daque]}(打${SUITS[o.daque]}对其安全) · ${hot}</div>`;
+    }).join('');
 }
 
 function dangerCls(d){ return d>=2.5?'dgr-hi':(d>=1.2?'dgr-mid':'dgr-lo'); }
@@ -282,8 +397,12 @@ function render(keepHint=false){
     if(hp) hp.innerHTML = '';
     const hd = document.getElementById('hintDetail');
     if(hd) hd.innerHTML = '';
+    const cb = document.getElementById('coachBox');
+    if(cb) cb.innerHTML = '';
   }
   if(!S || S.stage==='none'){ return; }
+
+  playNewSounds();
 
   // daque overlay
   const dq = document.getElementById('daqueOverlay');
@@ -421,11 +540,41 @@ function render(keepHint=false){
   } else {
     document.getElementById('overOverlay').classList.add('hidden');
   }
+
+  maybeAutoHint();
 }
 
 document.getElementById('newBtn').onclick = newGame;
 document.getElementById('dailyBtn').onclick = dailyGame;
 document.getElementById('hintBtn').onclick = hint;
+const sndBtn = document.getElementById('sndBtn');
+if(sndBtn){
+  const paint = ()=>{ sndBtn.textContent = soundOn ? '🔊' : '🔇';
+                      sndBtn.title = soundOn ? '关闭音效' : '打开音效'; };
+  paint();
+  sndBtn.onclick = ()=>{
+    soundOn = !soundOn;
+    localStorage.setItem('sound', soundOn ? '1' : '0');
+    if(soundOn){ try{ac();}catch(e){} tileClick(); }
+    else if(typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+    paint();
+  };
+}
+const coachChk = document.getElementById('coachChk');
+if(coachChk){
+  coachChk.checked = coachOn;
+  coachChk.onchange = ()=>{
+    coachOn = coachChk.checked;
+    localStorage.setItem('coach', coachOn ? '1' : '0');
+    lastCoachKey = null;
+    if(S) render();          // on: auto-hint fires; off: panels clear
+  };
+}
+
+// phones are landscape-only: mark touch devices so the portrait rotate
+// prompt (style.css #rotateOverlay) also works where pointer:coarse lies
+if('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  document.body.classList.add('touch');
 
 (async function init(){
   S = await api('/api/state');

@@ -3,7 +3,7 @@
    CDN runtime files are cached opportunistically the first time they're
    fetched (they're versioned/immutable URLs, safe to cache indefinitely).
    Bump CACHE_NAME whenever any precached file's content changes. */
-const CACHE_NAME = 'xuezhan-pwa-v1';
+const CACHE_NAME = 'xuezhan-pwa-v3';
 
 const APP_SHELL = [
   './app.html', './style.css', './game.js', './transport_pyodide.js',

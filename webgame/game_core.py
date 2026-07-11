@@ -299,7 +299,9 @@ class GameSession(object):
             self._finalize()
 
     def hint(self):
-        '''What the AI strategy would do in the human's place.'''
+        '''What the AI strategy would do in the human's place, plus a
+           human-readable reason and a public-info read of each opponent
+           (rendered by the UI's coach mode).'''
         if self.pending is None:
             return None
         p = self.players[self.human]
@@ -311,20 +313,126 @@ class GameSession(object):
                 out.update(self._hint_table())
             except Exception:
                 traceback.print_exc()
-            return out
+        elif va == 'pong':
+            out = {'action': strat.check_pong(p, self.dealer, self.players)}
+        elif va == 'kong':
+            out = {'action': strat.check_kong(p, self.dealer, self.players)}
+        elif va == 'zikong':
+            out = {'action': strat.check_zikong(p, self.dealer, self.players)}
+        elif va == 'hu':
+            out = {'action': strat.check_hu(p, self.dealer, self.round.player_before_act, self.players)}
+        elif va == 'zimo':
+            out = {'action': strat.check_zimo(p, self.dealer, self.round.last_drawn_card, self.players)}
+        elif va == 'robkong':
+            out = {'action': strat.check_robkong(p, self.dealer, self.round.jiakong_card, self.players)}
+        else:
+            out = {'action': va}
+        if va != 'discard':
+            try:
+                out['why'] = self._explain_choice(va, out['action'])
+            except Exception:
+                traceback.print_exc()
+        try:
+            out['opps'] = self._opponent_read()
+        except Exception:
+            traceback.print_exc()
+        return out
+
+    def _explain_choice(self, va, action):
+        '''One-line reason for the strategy's non-discard choice, computed
+           from the same measures the strategies optimize (deficiency
+           before/after, kong income) — not canned text where numbers help.'''
+        p = self.players[self.human]
+        dc = p.daque_color
+        KB = p.kgbase(self.dealer, self.players)
+        Pg = [x[0] for x in p.pile]
+        H = sorted(p.hand, key=lambda t: (t[0], t[1]))
+        declined = action == 'stand' or (isinstance(action, list) and action[0] == 'stand')
+
+        def best_after_meld(tile, n_remove):
+            #deficiency after claiming `tile` into a new meld; a pong leaves
+            #3k+2 tiles, so also pick the best follow-up discard
+            T = H[:]
+            for _ in range(n_remove):
+                T.remove(tile)
+            Pg2 = Pg + [tile]   # Pg holds each meld's first tile
+            if len(T) % 3 == 1:
+                return dfncy(T, Pg2, KB, dc)
+            best = None
+            for x in _unique(T):
+                TX = T[:]
+                TX.remove(x)
+                d = dfncy(TX, Pg2, KB, dc)
+                if best is None or d < best:
+                    best = d
+            return best
+
+        if va in ('hu', 'zimo', 'robkong'):
+            if declined:
+                return ('策略放弃这次胡牌：按期望值计算，继续做更大的番型'
+                        '（或等自摸翻倍）收益更高')
+            lbl = {'hu': '胡牌', 'zimo': '自摸（番数×2）',
+                   'robkong': '抢杠胡（番数×2）'}[va]
+            return '策略选择立即%s，落袋为安' % lbl
         if va == 'pong':
-            return {'action': strat.check_pong(p, self.dealer, self.players)}
+            cur = dfncy(H, Pg, KB, dc)
+            after = best_after_meld(self.dealer.table[-1], 2)
+            s = '碰后向听 %s（当前 %s）' % (after, cur)
+            if declined:
+                return s + '；碰会拆掉手牌结构或减少进张，策略选择过'
+            return s + ('；碰能直接推进向听' if after < cur
+                        else '；碰不退向听，还多一次出牌机会')
         if va == 'kong':
-            return {'action': strat.check_kong(p, self.dealer, self.players)}
+            cur = dfncy(H, Pg, KB, dc)
+            t = self.dealer.table[-1]
+            s = ('明杠立得2分、算一根（番数×2）并补摸一张，杠后向听 %s；'
+                 '碰后向听 %s（当前 %s）'
+                 % (best_after_meld(t, 3), best_after_meld(t, 2), cur))
+            if declined:
+                return s + '；策略认为都不如保留手型，选择过'
+            return s + ('；策略选择杠' if action == 'kong' else '；策略选择只碰')
         if va == 'zikong':
-            return {'action': strat.check_zikong(p, self.dealer, self.players)}
-        if va == 'hu':
-            return {'action': strat.check_hu(p, self.dealer, self.round.player_before_act, self.players)}
-        if va == 'zimo':
-            return {'action': strat.check_zimo(p, self.dealer, self.round.last_drawn_card, self.players)}
-        if va == 'robkong':
-            return {'action': strat.check_robkong(p, self.dealer, self.round.jiakong_card, self.players)}
-        return {'action': va}
+            if declined:
+                return '暗杠/加杠会锁死这组牌、失去改张灵活性；策略选择过'
+            if isinstance(action, list) and action[0] == 'ankong':
+                return '暗杠立得6分（三家各2）、算一根（番数×2）并补摸一张，稳赚'
+            if isinstance(action, list) and action[0] == 'jiakong':
+                return '加杠立得3分（三家各1）并补摸一张；注意可能被抢杠'
+        return ''
+
+    def _opponent_read(self):
+        '''Public-information estimate of each opponent: how likely they are
+           to be ready (tenpai) and which of MY hand tiles are dangerous to
+           them. Reuses strategy_defense's threat/danger model — reads no
+           hidden information, so coach mode never leaks opponents' hands.'''
+        if strategy_defense is None:
+            return []
+        p = self.players[self.human]
+        KB = p.kgbase(self.dealer, self.players)
+        cands = _unique(p.hand)
+        out = []
+        for q in self.players:
+            if q.player_id == p.player_id:
+                continue
+            info = {'id': q.player_id, 'winning': q.winning,
+                    'daque': q.daque_color, 'n_melds': len(q.pile),
+                    'n_discards': len(self.dealer.discard_lists[q.player_id])}
+            if q.winning:
+                info['threat'] = 0.0
+                info['hot'] = []
+                out.append(info)
+                continue
+            info['threat'] = round(strategy_defense.threat(q, self.dealer), 2)
+            scored = sorted(
+                ((round(strategy_defense.tile_danger(t, q, self.dealer, KB), 2), t)
+                 for t in cands), key=lambda s: -s[0])
+            info['hot'] = [[t, d] for d, t in scored if d >= 1.5][:3]
+            if len(q.pile) >= 2:
+                suits = set(m[0][0] for m in q.pile)
+                if len(suits) == 1:
+                    info['flush'] = suits.pop()
+            out.append(info)
+        return out
 
     # -------------------------------------------------------- explanations
     def _hint_table(self):

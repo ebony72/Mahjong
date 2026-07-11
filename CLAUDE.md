@@ -21,7 +21,13 @@ design changes) — read it before revisiting any strategy-improvement idea.
   `/api/new` accepts `{"seed": N, "ai": "initial"|"advanced"|"defensive"}`;
   `/api/hint` returns the strategy's move plus a ranked explanation table for
   discards (per candidate: dfncy after, availability-weighted effective-draw
-  count, deal-in danger from strategy_defense); POST `/api/step` advances the
+  count, deal-in danger from strategy_defense), a `why` one-liner for
+  non-discard decisions (pong/kong/hu/…: dfncy before/after the meld, kong
+  income) and `opps`, a public-info opponent read (strategy_defense
+  threat/tile_danger — never reads hidden hands): per opponent a tenpai
+  likelihood, suspected flush, and the human's hottest tiles against them.
+  The UI's 教练模式 (coach mode) toggle auto-fetches the hint at every human
+  decision and renders all of this; POST `/api/step` advances the
   engine one action (the UI uses it to pace AI turns). At game over the state
   carries per-player `settle` (itemized ledger via `_settlement`, sums exactly
   to myscore) and `decisions` (the divergence log) — the UI renders a
@@ -75,6 +81,15 @@ core (`webgame/game_core.py`, the `GameSession` class extracted from
   UI thread. `webgame/pwa_bridge.py` mirrors `server.py`'s HTTP routes as
   plain JSON-string functions — the two transports are the only code that
   differs between entry points.
+- Sound is asset-free (`game.js`): WebAudio-synthesized tile click + win
+  chime, and 碰/杠/胡/自摸 voiced via the Web Speech API (zh voice when
+  available). Driven by diffing `S.history` per render (one click per AI
+  batch, latest voice call wins); 🔊/🔇 header button persists to
+  localStorage. No audio files to precache.
+- Phones are landscape-only: the manifest locks the installed PWA to
+  landscape, and in-browser a portrait touch device (`orientation:portrait`
+  + `pointer:coarse` media query) gets a full-screen "rotate your phone"
+  overlay; a `max-height:520px` landscape media query compacts the layout.
 - `webgame/sw.js` — service worker; precaches the app shell + all `.py`
   engine sources at install so a second visit works fully offline. Bump
   `CACHE_NAME` when any precached file's content changes.

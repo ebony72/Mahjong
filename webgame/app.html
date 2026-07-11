@@ -39,8 +39,10 @@
       <option value="300">快</option>
       <option value="0">即时</option>
     </select></label>
+  <label class="coach-toggle"><input type="checkbox" id="coachChk"> 教练模式</label>
   <span class="spacer"></span>
   <span id="dfncyBox" class="badge"></span>
+  <button id="sndBtn" class="secondary" style="padding:7px 10px"></button>
   <button id="rulesBtn" class="secondary" onclick="document.getElementById('rulesOverlay').classList.remove('hidden')">规则说明</button>
   <button id="hintBtn" class="secondary">提示 Hint</button>
   <button id="dailyBtn" class="secondary">每日挑战</button>
@@ -64,6 +66,7 @@
       <div id="actionbar"><span id="prompt"></span><span id="buttons"></span></div>
       <div id="hintPanel"></div>
       <div id="hintDetail"></div>
+      <div id="coachBox"></div>
     </div>
   </div>
   <div id="log"></div>
@@ -119,6 +122,12 @@
     <div class="row"><button onclick="newGame()">再来一局</button>
     <button class="secondary" onclick="document.getElementById('overOverlay').classList.add('hidden')">看牌桌</button></div>
   </div>
+</div>
+
+<div id="rotateOverlay">
+  <div class="icon">📱</div>
+  <p>请将手机横屏游玩<br>
+  <span style="font-size:12.5px;opacity:.8">Please rotate your phone to landscape</span></p>
 </div>
 
 <script src="transport_pyodide.js"></script>
